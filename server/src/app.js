@@ -4,6 +4,7 @@ import env from './config/env.js';
 import routes from './routes/index.js';
 import agentRoutes from './routes/agent.routes.js';
 import searchRoutes from './routes/search.routes.js';
+import questionDetailRoutes from './routes/questionDetail.routes.js';
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/v1', routes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api', questionDetailRoutes);
 
 // Global Error Handler Middleware
 app.use((err, req, res, next) => {
