@@ -39,8 +39,8 @@ export const validateConversation = (fields = {}) => {
 /**
  * Smart heuristic extraction fallback if Gemini API is unavailable or throws errors.
  */
-function heuristicExtract(latestMsg, existingFields = {}) {
-  const text = (latestMsg || '').toLowerCase();
+function heuristicExtract(latestMsg = '', existingFields = {}) {
+  const text = (typeof latestMsg === 'string' ? latestMsg : JSON.stringify(latestMsg)).toLowerCase();
   const companies = ['amazon', 'google', 'microsoft', 'meta', 'apple', 'netflix', 'uber', 'linkedin', 'adobe', 'twitter', 'oracle'];
   
   let comp = existingFields.company || null;
@@ -55,52 +55,52 @@ function heuristicExtract(latestMsg, existingFields = {}) {
   if (text.includes('backend')) role = 'Backend Developer';
   else if (text.includes('frontend')) role = 'Frontend Engineer';
   else if (text.includes('fullstack') || text.includes('full stack')) role = 'Fullstack Engineer';
-  else if (text.includes('sde') || text.includes('software')) role = 'Software Development Engineer';
+  else if (text.includes('sde') || text.includes('software') || text.includes('developer') || text.includes('engineer')) role = 'Software Development Engineer';
 
   let exp = existingFields.experience || null;
-  const expMatch = text.match(/(\d+\+?\s*(years?|yrs?)|fresher|intern|final\s*year|college\s*student|student)/i);
-  if (expMatch) {
-    exp = expMatch[0];
+  if (text.includes('senior') || text.includes('lead') || text.includes('5') || text.includes('6') || text.includes('7')) {
+    exp = 'Senior (5+ yrs)';
+  } else if (text.includes('mid') || text.includes('2') || text.includes('3') || text.includes('4')) {
+    exp = 'Mid-Level (2-4 yrs)';
+  } else if (
+    text.includes('student') || text.includes('fresher') || text.includes('junior') || text.includes('graduate') ||
+    text.includes('entry') || text.includes('intern') || text.includes('0') || text.includes('1') ||
+    text.includes('experience yet') || text.includes('final-year') || text.includes('college')
+  ) {
+    exp = 'Junior / Fresher (0-1 yrs)';
   }
 
-  const skills = [...(existingFields.skills || [])];
-  if (text.includes('dp') || text.includes('dynamic programming')) skills.push('Dynamic Programming');
-  if (text.includes('redis')) skills.push('Redis');
-  if (text.includes('react')) skills.push('React');
-  if (text.includes('node')) skills.push('Node.js');
+  // Fallback defaults for interview intent if company or role was detected
+  if (!comp && (text.includes('interview') || text.includes('coding') || text.includes('prep'))) comp = 'Target Tech Company';
+  if (!role && (text.includes('interview') || text.includes('coding') || text.includes('prep'))) role = 'Software Engineer';
+  if (!exp && (comp || role)) exp = 'Junior / Fresher (0-1 yrs)';
 
-  const mergedFields = {
-    company: comp,
-    role: role,
-    experience: exp,
-    skills: Array.from(new Set(skills)),
-    technologies: Array.from(new Set([...(existingFields.technologies || [])])),
-    interviewTypes: Array.from(new Set([...(existingFields.interviewTypes || [])])),
-    seniority: existingFields.seniority || null,
-  };
-
-  const { missingFields } = validateConversation(mergedFields);
   return {
-    fields: mergedFields,
-    confidence: 0.85,
-    missingFields,
+    company: comp,
+    role: role || existingFields.role || null,
+    experience: exp || existingFields.experience || null,
+    skills: existingFields.skills || ['DSA', 'Problem Solving'],
+    technologies: existingFields.technologies || [],
+    interviewTypes: existingFields.interviewTypes || ['Coding'],
+    seniority: existingFields.seniority || exp || null,
   };
 }
 
 /**
- * Call Gemini to extract intent from user message & history.
- * Tries multiple models and falls back to heuristic extraction if needed.
+ * Extract candidate fields using Gemini with fallback.
  */
-export const extractIntent = async (chatHistory = [], existingFields = {}) => {
-  const ai = getGeminiClient();
-  const latestMsg = chatHistory[chatHistory.length - 1]?.content || '';
+export const extractIntent = async (messages = [], existingFields = {}) => {
+  const lastUserObj = [...messages].reverse().find((m) => m.sender === 'user' || m.role === 'user');
+  const latestUserMsg = lastUserObj?.text || lastUserObj?.content || (typeof lastUserObj === 'string' ? lastUserObj : '');
 
+  const fallback = heuristicExtract(latestUserMsg, existingFields);
+  const ai = getGeminiClient();
   if (!ai) {
-    console.warn('[extractIntent Note]: Gemini API client unavailable. Using heuristic fallback.');
-    return heuristicExtract(latestMsg, existingFields);
+    console.warn('[extractIntent Note]: Gemini API key unavailable. Using smart heuristic extraction.');
+    return fallback;
   }
 
-  const promptText = buildIntentPrompt(chatHistory, existingFields);
+  const promptText = buildIntentPrompt(messages, existingFields);
 
   const attemptCall = async (modelName) => {
     const response = await ai.models.generateContent({
@@ -116,189 +116,108 @@ export const extractIntent = async (chatHistory = [], existingFields = {}) => {
     return JSON.parse(cleaned);
   };
 
+  let parsed = null;
   const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
   for (const modelName of models) {
     try {
-      const parsed = await attemptCall(modelName);
-      if (parsed) {
-        return normalizeIntentResponse(parsed, existingFields);
-      }
+      parsed = await attemptCall(modelName);
+      if (parsed) break;
     } catch (err) {
       console.warn(`[extractIntent ${modelName} Note]:`, err.message);
     }
   }
 
-  // Fallback to heuristic parser if Gemini API fails
-  return heuristicExtract(latestMsg, existingFields);
+  const result = {
+    company: parsed?.company || existingFields.company || fallback.company,
+    role: parsed?.role || existingFields.role || fallback.role,
+    experience: parsed?.experience || existingFields.experience || fallback.experience,
+    skills: Array.isArray(parsed?.skills) ? parsed.skills : existingFields.skills || ['DSA'],
+    technologies: Array.isArray(parsed?.technologies) ? parsed.technologies : existingFields.technologies || [],
+    interviewTypes: Array.isArray(parsed?.interviewTypes) ? parsed.interviewTypes : existingFields.interviewTypes || ['Coding'],
+    seniority: parsed?.seniority || parsed?.experience || existingFields.seniority || fallback.experience,
+  };
+
+  return result;
 };
 
 /**
- * Normalize and merge extracted intent JSON with existing fields.
+ * Generate a follow-up question asking ONLY for missing fields.
  */
-function normalizeIntentResponse(extracted, existingFields = {}) {
-  if (!extracted || typeof extracted !== 'object') {
-    return null;
+export const generateFollowUpQuestion = async (fields = {}, missingFields = []) => {
+  if (!missingFields.length) {
+    return "Great! I have all the details needed. Generating your custom DSA Topic recommendations now!";
   }
 
-  const mergedFields = {
-    company: extracted.company || existingFields.company || null,
-    role: extracted.role || existingFields.role || null,
-    experience: extracted.experience || existingFields.experience || null,
-    skills: Array.from(new Set([...(existingFields.skills || []), ...(extracted.skills || [])])),
-    technologies: Array.from(new Set([...(existingFields.technologies || []), ...(extracted.technologies || [])])),
-    interviewTypes: Array.from(new Set([...(existingFields.interviewTypes || []), ...(extracted.interviewTypes || [])])),
-    seniority: extracted.seniority || existingFields.seniority || null,
-  };
-
-  const { missingFields } = validateConversation(mergedFields);
-
-  return {
-    fields: mergedFields,
-    confidence: typeof extracted.confidence === 'number' ? extracted.confidence : 0.9,
-    missingFields,
-  };
-}
-
-/**
- * Call Gemini to generate a natural follow-up question.
- */
-export const generateFollowUpQuestion = async (chatHistory = [], missingFields = [], currentFields = {}) => {
   const ai = getGeminiClient();
-  
-  const generateFallbackQuestion = () => {
-    if (missingFields.includes('company')) {
-      return "Which company are you preparing for (e.g. Amazon, Google, Microsoft)?";
-    }
-    if (missingFields.includes('role')) {
-      return "What job role or title are you aiming for (e.g. Backend Developer, SDE-1)?";
-    }
-    if (missingFields.includes('experience')) {
-      return "How many years of experience or what experience level do you have?";
-    }
-    return "Could you provide a bit more detail about your interview target?";
-  };
-
   if (!ai) {
-    return generateFallbackQuestion();
+    const fieldName = missingFields[0];
+    if (fieldName === 'company') return "Which company are you preparing for (e.g. Amazon, Google, Meta, Microsoft)?";
+    if (fieldName === 'role') return "What target role are you interviewing for (e.g. Backend Developer, SDE-2, Fullstack)?";
+    if (fieldName === 'experience') return "What is your experience level (e.g. Junior 0-2 yrs, Mid-Level 2-4 yrs, Senior 5+ yrs)?";
+    return `Could you please specify your ${missingFields.join(', ')}?`;
   }
 
-  const promptText = buildFollowUpPrompt(missingFields, currentFields, chatHistory);
-
-  const attemptCall = async (modelName) => {
+  const promptText = buildFollowUpPrompt(fields, missingFields);
+  try {
     const response = await ai.models.generateContent({
-      model: modelName,
+      model: 'gemini-2.0-flash',
       contents: promptText,
-      config: {
-        temperature: 0.7,
-      },
+      config: { temperature: 0.4 },
     });
-    return (response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-  };
-
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
-  for (const modelName of models) {
-    try {
-      const result = await attemptCall(modelName);
-      if (result) return result;
-    } catch (err) {
-      console.warn(`[generateFollowUpQuestion ${modelName} Note]:`, err.message);
-    }
+    return response.text?.trim() || `Could you please provide your ${missingFields.join(', ')}?`;
+  } catch (err) {
+    return `Could you please share your ${missingFields.join(', ')} so I can build your tailored DSA prep kit?`;
   }
-
-  return generateFallbackQuestion();
 };
 
 /**
- * Persist conversation and updated fields inside Cloud Firestore.
+ * Update conversation state in Cloud Firestore.
  */
-export const updateConversation = async ({
-  conversationId = null,
-  userId = null,
-  userMessage = '',
-  assistantResponse = '',
-  updatedFields = {},
-  isCompleted = false,
-}) => {
+export const updateConversation = async (conversationId, messages = [], fields = {}, userId = null) => {
+  const activeId = conversationId || `conv-${Date.now()}`;
+  const { completed, missingFields } = validateConversation(fields);
   const db = getDb();
-  if (!db) {
-    console.warn('[Firestore] Database instance unavailable. Operating in memory.');
-    return {
-      id: conversationId || `local-${Date.now()}`,
-      userId,
-      status: isCompleted ? 'completed' : 'active',
-      completed: isCompleted,
-      fields: updatedFields,
-      chatHistory: [
-        { role: 'user', content: userMessage, timestamp: new Date().toISOString() },
-        { role: 'assistant', content: assistantResponse, timestamp: new Date().toISOString() },
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-  }
 
-  const collectionRef = db.collection(COLLECTION_NAME);
-  const now = new Date().toISOString();
-
-  const newUserMsg = { role: 'user', content: userMessage, timestamp: now };
-  const newAssistantMsg = assistantResponse ? { role: 'assistant', content: assistantResponse, timestamp: now } : null;
-
-  let docRef;
-  let existingHistory = [];
-
-  if (conversationId) {
-    docRef = collectionRef.doc(conversationId);
-    try {
-      const docSnap = await docRef.get();
-      if (docSnap.exists) {
-        const data = docSnap.data();
-        existingHistory = data.chatHistory || [];
-      }
-    } catch (e) {
-      console.warn('[updateConversation doc read note]:', e.message);
-    }
-  } else {
-    docRef = collectionRef.doc();
-  }
-
-  const updatedHistory = [...existingHistory, newUserMsg];
-  if (newAssistantMsg) {
-    updatedHistory.push(newAssistantMsg);
-  }
-
-  const docPayload = {
+  const dataToSave = {
     userId: userId || null,
-    status: isCompleted ? 'completed' : 'active',
-    completed: isCompleted,
-    fields: updatedFields,
-    chatHistory: updatedHistory,
+    conversationId: activeId,
+    messages,
+    chatHistory: messages,
+    extractedFields: fields,
+    fields,
+    missingFields,
+    completed,
+    status: completed ? 'completed' : 'in_progress',
     updatedAt: FieldValue.serverTimestamp(),
   };
 
-  if (!conversationId) {
-    docPayload.createdAt = FieldValue.serverTimestamp();
-  }
-
-  try {
-    await docRef.set(docPayload, { merge: true });
-  } catch (err) {
-    console.error('[Firestore updateConversation set Error]:', err.message);
+  if (db && activeId) {
+    try {
+      const docRef = db.collection(COLLECTION_NAME).doc(activeId);
+      const snap = await docRef.get();
+      if (!snap.exists) {
+        dataToSave.createdAt = FieldValue.serverTimestamp();
+      }
+      await docRef.set(dataToSave, { merge: true });
+    } catch (err) {
+      console.error('[Firestore updateConversation Error]:', err.message);
+    }
   }
 
   return {
-    id: docRef.id,
-    userId: userId || null,
-    status: isCompleted ? 'completed' : 'active',
-    completed: isCompleted,
-    fields: updatedFields,
-    chatHistory: updatedHistory,
-    createdAt: now,
-    updatedAt: now,
+    id: activeId,
+    conversationId: activeId,
+    fields,
+    completed,
+    missingFields,
+    status: dataToSave.status,
+    messages,
+    chatHistory: messages,
   };
 };
 
 /**
- * Generate 10 to 20 optimized search queries using Gemini from completed profile fields.
+ * Generate 20 to 40 DSA topic search queries using Gemini from completed profile fields.
  */
 export const generateSearchQueries = async (conversationId, fields = {}, userId = null) => {
   const { completed } = validateConversation(fields);
@@ -307,13 +226,18 @@ export const generateSearchQueries = async (conversationId, fields = {}, userId 
   }
 
   const ai = getGeminiClient();
+  const company = fields.company || 'Tech';
   const defaultQueries = [
-    { category: 'company', query: `${fields.company} ${fields.role} Interview` },
-    { category: 'skills', query: `${fields.company} ${fields.role} Interview Questions` },
-    { category: 'coding', query: `${fields.company} Dynamic Programming Questions` },
-    { category: 'system_design', query: `${fields.company} System Design LLD` },
-    { category: 'behavioral', query: `${fields.company} Leadership Principles` },
-    { category: 'experience_level', query: `${fields.company} ${fields.role} ${fields.experience} Experience` },
+    { topic: 'Dynamic Programming', query: `${company} Dynamic Programming Problems`, priorityRating: 5 },
+    { topic: 'Graphs', query: `${company} Graph BFS DFS Problems`, priorityRating: 5 },
+    { topic: 'Sliding Window', query: `${company} Sliding Window Two Pointer Problems`, priorityRating: 5 },
+    { topic: 'Binary Search', query: `${company} Binary Search Problems`, priorityRating: 4 },
+    { topic: 'Trees & BST', query: `${company} Binary Tree Problems`, priorityRating: 4 },
+    { topic: 'Heap & Priority Queue', query: `${company} Heap Priority Queue Problems`, priorityRating: 4 },
+    { topic: 'Backtracking', query: `${company} Backtracking Recursion Problems`, priorityRating: 4 },
+    { topic: 'HashMap & Strings', query: `${company} HashMap Array String Problems`, priorityRating: 4 },
+    { topic: 'Prefix Sum', query: `${company} Prefix Sum Range Query Problems`, priorityRating: 3 },
+    { topic: 'Union Find', query: `${company} Union Find DSU Problems`, priorityRating: 3 },
   ];
 
   if (!ai) {
@@ -371,7 +295,66 @@ export const generateSearchQueries = async (conversationId, fields = {}, userId 
 };
 
 /**
- * Execute Phase 4 end-to-end intelligence analysis.
+ * Group search results into DSA topics for fallbacks.
+ */
+function buildDefaultDsaTopics(profile = {}, searchResults = []) {
+  const company = profile.company || 'Tech Company';
+  const role = profile.role || 'Software Engineer';
+
+  // Group items by topic tags
+  const dpQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('dp') || t.toLowerCase().includes('dynamic')));
+  const graphQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('graph') || t.toLowerCase().includes('dfs') || t.toLowerCase().includes('bfs')));
+  const treeQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('tree')));
+  const otherQuestions = searchResults.filter(r => !dpQuestions.includes(r) && !graphQuestions.includes(r) && !treeQuestions.includes(r));
+
+  return [
+    {
+      name: 'Dynamic Programming',
+      priorityRating: 5,
+      explanation: `High frequency in ${company} ${role} technical rounds (knapsack, state transitions, memoization).`,
+      questionCount: dpQuestions.length || 5,
+      estimatedInterviewFrequency: 'Very High',
+      questions: dpQuestions.length ? dpQuestions : [
+        { id: 'water-overflow', title: 'Water Overflow / DP State Transition', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `High frequency DP pattern for ${company}` },
+        { id: 'cut-ribbon', title: 'Cut Ribbon (Unbounded Knapsack)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `Classic DP optimization question for ${company}` },
+      ],
+    },
+    {
+      name: 'Graphs & BFS/DFS',
+      priorityRating: 5,
+      explanation: `Crucial for ${role} roles evaluating shortest paths, grid traversals, and topological sorting.`,
+      questionCount: graphQuestions.length || 6,
+      estimatedInterviewFrequency: 'Very High',
+      questions: graphQuestions.length ? graphQuestions : [
+        { id: 'lunar-new-year-and-a-wander', title: 'Lunar New Year and a Wander (Graph Traversal)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `Graph BFS/DFS priority queue pattern for ${company}` },
+        { id: 'two-buttons', title: 'Two Buttons (Shortest Path BFS)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `State-space BFS graph search for ${company}` },
+      ],
+    },
+    {
+      name: 'Trees & Binary Search Trees',
+      priorityRating: 4,
+      explanation: `Evaluates recursive tree traversals, BST operations, and LCA algorithms.`,
+      questionCount: treeQuestions.length || 5,
+      estimatedInterviewFrequency: 'High',
+      questions: treeQuestions.length ? treeQuestions : [
+        { id: 'k-tree', title: 'k-Tree (Tree DP & Traversal)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `Tree traversal & DP recurrence pattern` },
+      ],
+    },
+    {
+      name: 'Arrays, HashMap & Two Pointers',
+      priorityRating: 4,
+      explanation: `Foundational DSA topic tested in initial phone screens.`,
+      questionCount: otherQuestions.length || 8,
+      estimatedInterviewFrequency: 'High',
+      questions: otherQuestions.length ? otherQuestions : [
+        { id: 't-primes', title: 'T-primes (Number Theory & Binary Search)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset/problem/230/B', reasonRecommended: `High frequency problem asked in ${company} coding rounds` },
+      ],
+    },
+  ];
+}
+
+/**
+ * Execute Phase 4 end-to-end intelligence analysis (DSA Topic Centric).
  */
 export const analyzeResults = async (conversationId) => {
   if (!conversationId) {
@@ -409,6 +392,8 @@ export const analyzeResults = async (conversationId) => {
     }
   }
 
+  const defaultTopics = buildDefaultDsaTopics(profile, searchResults);
+
   const ai = getGeminiClient();
   const defaultAnalysis = {
     summary: {
@@ -416,47 +401,16 @@ export const analyzeResults = async (conversationId) => {
       role: profile.role || null,
       experience: profile.experience || null,
       totalResults: searchResults.length,
-      recommendedQuestions: Math.min(searchResults.length, 10),
-      confidence: 0.9,
+      totalTopics: defaultTopics.length,
+      confidence: 0.95,
     },
-    categories: [
-      {
-        name: 'Backend',
-        count: searchResults.length,
-        questions: searchResults.map(r => ({
-          title: r.title,
-          source: r.source,
-          difficulty: r.difficulty || 'Medium',
-          category: 'Backend',
-          reasonRecommended: `Relevant for ${profile.company || 'Tech'} ${profile.role || 'Developer'} interview`,
-          shortExplanation: r.description || 'Practice core backend principles and algorithms.',
-          estimatedInterviewFrequency: 'High',
-          estimatedStudyTime: '45 mins',
-        })),
-      },
-    ],
-    priorityTopics: [
-      { topic: 'System Design & Architecture', importance: 'High', reason: 'Critical for backend roles' },
-      { topic: 'Data Structures & Algorithms', importance: 'High', reason: 'Essential for technical coding rounds' },
-    ],
+    topics: defaultTopics,
     learningRoadmap: [
-      { step: 1, title: 'Core Data Structures', description: 'Master Arrays, HashMaps, Trees, and Graphs' },
-      { step: 2, title: 'System Design & APIs', description: 'Study REST API design, caching, and database indexing' },
-    ],
-    recommendations: [
-      { title: 'Focus on Company Specific Patterns', reason: `High probability of occurrence in ${profile.company || 'target'} rounds` },
+      { step: 1, title: 'Master Core Data Structures', description: 'Focus on Arrays, HashMaps, Trees, and Graphs first.' },
+      { step: 2, title: 'Advanced Algorithmic Patterns', description: 'Practice Dynamic Programming, Sliding Window, and Backtracking.' },
     ],
     companyInsights: [
-      { title: `${profile.company || 'Target Company'} Prep`, description: 'Emphasis on clean code, scalability, and problem solving.' },
-    ],
-    interviewStrategy: [
-      { title: 'Study Priority', description: 'Start with high-frequency coding patterns first, then move to System Design.' },
-    ],
-    weakAreas: [
-      { topic: 'System Design LLD', reason: 'Recommended for mid/senior level roles' },
-    ],
-    similarTopics: [
-      { topic: 'Data Structures', related: ['Array', 'HashMap', 'Trees', 'Graphs'] },
+      { title: `${profile.company || 'Target Company'} DSA Expectations`, description: 'High emphasis on clean code modularity, state space analysis, and optimal time complexities.' },
     ],
   };
 
@@ -485,7 +439,7 @@ export const analyzeResults = async (conversationId) => {
   for (const modelName of models) {
     try {
       parsed = await attemptCall(modelName);
-      if (parsed?.summary) break;
+      if (parsed?.topics || parsed?.summary) break;
     } catch (err) {
       console.warn(`[analyzeResults ${modelName} Note]:`, err.message);
     }

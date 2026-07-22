@@ -7,40 +7,37 @@ import {
 } from '../services/userActivity.service.js';
 
 /**
- * Controller for POST /api/agent/question-detail
+ * Controller for POST /api/question/details
  */
-export const handleGetQuestionDetail = async (req, res, next) => {
+export const handleGetQuestionDetails = async (req, res, next) => {
   try {
-    const { questionId, title, company, role, difficulty, category, topics, url, userId = 'guest' } = req.body;
+    const { questionId, source, title, description, difficulty, topics, company, url, userId = 'guest' } = req.body;
 
-    if (!questionId && !title) {
+    const targetId = questionId || (title ? title.toLowerCase().replace(/\s+/g, '-') : null);
+    if (!targetId) {
       return res.status(400).json({ error: 'Question ID or Title is required.' });
     }
 
     const questionData = {
-      id: questionId || title.toLowerCase().replace(/\s+/g, '-'),
-      title: title || questionId,
-      company: company || 'Tech Company',
-      role: role || 'Software Development Engineer',
+      questionId: targetId,
+      source: source || 'all',
+      title: title || targetId,
+      description: description || '',
       difficulty: difficulty || 'Medium',
-      category: category || 'General',
       topics: topics || ['Algorithms'],
+      company: company || 'Tech Company',
       url: url || null,
     };
 
-    const detail = await getQuestionDetail(questionData);
+    const details = await getQuestionDetail(questionData);
 
-    // Track in recently viewed
-    await trackRecentlyViewed(userId, questionData.id, questionData);
+    // Track recently viewed
+    await trackRecentlyViewed(userId, targetId, questionData);
 
-    return res.status(200).json({
-      status: 'success',
-      questionId: questionData.id,
-      detail,
-    });
+    return res.status(200).json(details);
   } catch (error) {
-    console.error('[handleGetQuestionDetail Error]:', error);
-    return res.status(500).json({ error: error.message || 'Failed to retrieve question details.' });
+    console.error('[handleGetQuestionDetails Controller Error]:', error);
+    return res.status(500).json({ error: 'Unable to generate detailed explanation.' });
   }
 };
 
@@ -91,7 +88,7 @@ export const handleGetUserRecentlyViewed = async (req, res, next) => {
 };
 
 export default {
-  handleGetQuestionDetail,
+  handleGetQuestionDetails,
   handleToggleBookmark,
   handleGetUserBookmarks,
   handleGetUserRecentlyViewed,

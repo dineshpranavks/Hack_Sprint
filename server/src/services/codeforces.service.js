@@ -2,83 +2,75 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const localCodeforcesCache = require('../data/codeforcesCache.json');
 
+const PERMITTED_DSA_TAGS = [
+  'graphs', 'trees', 'dp', 'binary search', 'heap', 'dfs', 'bfs',
+  'greedy', 'backtracking', 'two pointers', 'hashmap', 'prefix sum',
+  'bitmask', 'trie', 'dsu', 'union find', 'data structures', 'shortest paths',
+  'number theory', 'strings', 'matrices', 'divide and conquer'
+];
+
+const EXCLUDED_TAGS = ['implementation', 'constructive algorithms', 'math', 'brute force'];
+
 /**
- * Filter local Codeforces problem cache based on profile criteria (tags, rating, topics).
- * NEVER performs text queries or external web scraping.
- * Caps results at 20 items max.
+ * Filter local Codeforces problem cache based on interview criteria.
+ * Rating range: 1200 to 2200.
+ * Prefers core DSA topics over Div2 A implementation-only / math-only problems.
  */
 export const searchCodeforces = async (queries = [], profile = {}) => {
   const problems = Array.isArray(localCodeforcesCache) ? localCodeforcesCache : [];
   if (!problems.length) return [];
 
-  // Determine target rating based on candidate experience / seniority
-  const expStr = (profile.experience || '').toLowerCase();
-  const seniorityStr = (profile.seniority || '').toLowerCase();
+  // Rating range strictly enforced: 1200 to 2200 for interview relevancy
+  const minRating = 1200;
+  const maxRating = 2200;
 
-  let minRating = 800;
-  let maxRating = 1600;
-
-  if (expStr.includes('5') || expStr.includes('senior') || seniorityStr.includes('senior') || seniorityStr.includes('lead')) {
-    minRating = 1400;
-    maxRating = 2400;
-  } else if (expStr.includes('2') || expStr.includes('3') || expStr.includes('mid') || seniorityStr.includes('sde-2')) {
-    minRating = 1100;
-    maxRating = 1800;
-  } else {
-    minRating = 800;
-    maxRating = 1400;
-  }
-
-  // Extract skills/topics from profile
-  const profileTags = [
-    ...(profile.skills || []),
-    ...(profile.technologies || []),
-    ...(profile.interviewTypes || [])
-  ].map(t => t.toLowerCase());
-
-  // Filter problems by rating and tags/topics
+  // Filter problems by rating (1200-2200) and interview DSA topics
   let filtered = problems.filter((p) => {
-    const r = p.rating || 1000;
-    return r >= minRating && r <= maxRating;
+    const rating = p.rating || 1300;
+    if (rating < minRating || rating > maxRating) return false;
+
+    const tags = (p.tags || []).map((t) => t.toLowerCase());
+
+    // Prefer core DSA tags
+    const hasDsaTag = tags.some((t) => PERMITTED_DSA_TAGS.some((dt) => t.includes(dt)));
+    const isImplementationOnly = tags.length === 1 && EXCLUDED_TAGS.includes(tags[0]);
+
+    if (isImplementationOnly) return false;
+    return hasDsaTag || tags.length > 1;
   });
 
-  // If filtered set is too small, relax rating bounds slightly
-  if (filtered.length < 5) {
-    filtered = problems;
+  if (filtered.length < 10) {
+    filtered = problems.filter((p) => (p.rating || 1300) >= 1000 && (p.rating || 1300) <= 2200);
   }
 
-  // Sort by topic overlap with profileTags if present
-  if (profileTags.length > 0) {
-    filtered.sort((a, b) => {
-      const aMatch = (a.tags || []).some(t => profileTags.some(pt => t.toLowerCase().includes(pt) || pt.includes(t.toLowerCase())));
-      const bMatch = (b.tags || []).some(t => profileTags.some(pt => t.toLowerCase().includes(pt) || pt.includes(t.toLowerCase())));
-      if (aMatch && !bMatch) return -1;
-      if (!aMatch && bMatch) return 1;
-      return 0;
-    });
-  }
+  return filtered.slice(0, 30).map((p) => {
+    const rating = p.rating || 1300;
+    let difficulty = 'Medium';
+    if (rating < 1400) difficulty = 'Easy';
+    else if (rating >= 1800) difficulty = 'Hard';
 
-  // Map to normalized result structure
-  const results = filtered.slice(0, 20).map((prob) => ({
-    id: `codeforces-${prob.id || prob.slug}`,
-    source: 'codeforces',
-    title: prob.name,
-    description: prob.description || `Codeforces problem rated ${prob.rating || 1200}`,
-    url: prob.url || `https://codeforces.com/problemset/problem/${prob.id}/A`,
-    company: profile.company || (prob.companies ? prob.companies[0] : null),
-    role: profile.role || null,
-    topics: prob.topics || prob.tags || ['Algorithms'],
-    difficulty: prob.difficulty || (prob.rating > 1400 ? 'Hard' : prob.rating > 1000 ? 'Medium' : 'Easy'),
-    tags: prob.tags || [],
-    author: prob.author || 'Codeforces',
-    createdAt: new Date().toISOString(),
-    metadata: {
-      rating: prob.rating || 1200,
-      slug: prob.slug || prob.name.toLowerCase().replace(/\s+/g, '-'),
-    },
-  }));
-
-  return results;
+    return {
+      id: p.slug || `codeforces-${p.id}`,
+      slug: p.slug || `codeforces-${p.id}`,
+      source: 'codeforces',
+      type: 'Coding Problem',
+      isCodingProblem: true,
+      title: p.name || 'Codeforces Coding Problem',
+      description: p.description || `Codeforces problem rated ${rating} covering ${(p.topics || p.tags || []).join(', ')}.`,
+      url: p.url || `https://codeforces.com/problemset/problem/${p.id}`,
+      company: p.companies?.[0] || profile.company || 'Tech Company',
+      role: profile.role || 'Software Engineer',
+      topics: p.topics || p.tags || ['DSA', 'Algorithms'],
+      difficulty,
+      rating,
+      tags: p.tags || ['Codeforces'],
+      author: p.author || 'Codeforces',
+      reasonRecommended: `Rating ${rating} problem testing ${(p.topics || p.tags || ['DSA']).join(', ')} patterns.`,
+      estimatedInterviewFrequency: rating >= 1600 ? 'Very High' : 'High',
+      estimatedStudyTime: difficulty === 'Hard' ? '60 mins' : difficulty === 'Medium' ? '45 mins' : '30 mins',
+      createdAt: new Date().toISOString(),
+    };
+  });
 };
 
 export default searchCodeforces;

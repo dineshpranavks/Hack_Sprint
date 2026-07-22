@@ -11,6 +11,72 @@ const SEARCH_RESULTS_COLLECTION = 'searchResults';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
+ * Classify a search item into exact categories:
+ * - 'Coding Problem'
+ * - 'Interview Experience'
+ * - 'Discussion'
+ * - 'System Design'
+ * - 'Blog'
+ * - 'Cheat Sheet'
+ */
+export const classifyResultItem = (item = {}) => {
+  const source = (item.source || '').toLowerCase();
+  const title = (item.title || '').toLowerCase();
+  const desc = (item.description || '').toLowerCase();
+  const tags = (item.tags || []).map((t) => t.toLowerCase()).join(' ');
+  const topics = (item.topics || []).map((t) => t.toLowerCase()).join(' ');
+  const combinedText = `${title} ${desc} ${tags} ${topics}`;
+
+  // Rule 1: Codeforces items are ALWAYS Coding Problems
+  if (source === 'codeforces' || combinedText.includes('codeforces') || combinedText.includes('problemset')) {
+    return 'Coding Problem';
+  }
+
+  // Rule 2: Explicit Cheat Sheet detection
+  if (combinedText.includes('cheat sheet') || combinedText.includes('cheatsheet')) {
+    return 'Cheat Sheet';
+  }
+
+  // Rule 3: Explicit System Design detection
+  if (combinedText.includes('system design') || combinedText.includes('hld') || combinedText.includes('lld') || combinedText.includes('architecture')) {
+    return 'System Design';
+  }
+
+  // Rule 4: Explicit Blog / Handbook / Career Advice detection
+  if (
+    combinedText.includes('handbook') ||
+    combinedText.includes('guide') ||
+    combinedText.includes('blog') ||
+    combinedText.includes('resume') ||
+    combinedText.includes('salary') ||
+    combinedText.includes('hr interview') ||
+    combinedText.includes('career advice')
+  ) {
+    return 'Blog';
+  }
+
+  // Rule 5: Interview Experience detection
+  if (combinedText.includes('interview experience') || combinedText.includes('interview loop') || combinedText.includes('asked in interview')) {
+    return 'Interview Experience';
+  }
+
+  // Rule 6: Coding Problem Detection keywords
+  const codingKeywords = [
+    'problem', 'input', 'output', 'constraints', 'two sum', 'lru cache', 'number of islands',
+    'clone graph', 'binary tree', 'merge intervals', 'array', 'string', 'algorithm', 'dsa',
+    'solution', 'leetcode', 'hackerrank', 'codechef', 'tree', 'heap', 'stack', 'queue',
+    'dp', 'dynamic programming', 'graph', 'backtracking', 't-primes', 'watermelon', 'way too long words'
+  ];
+
+  const isCoding = codingKeywords.some((kw) => combinedText.includes(kw));
+  if (isCoding) {
+    return 'Coding Problem';
+  }
+
+  return 'Discussion';
+};
+
+/**
  * Remove duplicates based on URL or Title.
  */
 export const removeDuplicateUrls = (results = []) => {
@@ -33,64 +99,91 @@ export const removeDuplicateUrls = (results = []) => {
 };
 
 /**
- * Calculate relevance score based on criteria matches:
- * Company Match: +30
- * Role Match: +25
- * Topic Match: +20
- * Skill Match: +15
- * Interview Type Match: +10
+ * Calculate point-based relevance score based on strict rules:
+ * - Coding Problem: +100
+ * - Company Match: +50
+ * - Topic Match: +30
+ * - Difficulty Match: +20
+ * - Interview Experience: +10
+ * - Blog: -40
+ * - System Design: -50
+ * - Cheat Sheet: -60
  */
 export const calculateRelevanceScore = (item, profile = {}) => {
   let score = 50; // Base score
 
+  const itemType = classifyResultItem(item);
   const itemText = `${item.title} ${item.description} ${(item.tags || []).join(' ')} ${(item.topics || []).join(' ')}`.toLowerCase();
-  
+
   const company = (profile.company || '').toLowerCase();
   const role = (profile.role || '').toLowerCase();
-  const skills = (profile.skills || []).map(s => s.toLowerCase());
-  const technologies = (profile.technologies || []).map(t => t.toLowerCase());
-  const interviewTypes = (profile.interviewTypes || []).map(i => i.toLowerCase());
+  const profileDifficulty = (profile.experience || '').toLowerCase().includes('senior') ? 'hard' : 'medium';
+  const itemDifficulty = (item.difficulty || '').toLowerCase();
 
-  // Company Match (+30)
+  // Item Type Scoring Matrix
+  switch (itemType) {
+    case 'Coding Problem':
+      score += 100;
+      break;
+    case 'Interview Experience':
+      score += 10;
+      break;
+    case 'Blog':
+      score -= 40;
+      break;
+    case 'System Design':
+      score -= 50;
+      break;
+    case 'Cheat Sheet':
+      score -= 60;
+      break;
+    default:
+      score += 5;
+      break;
+  }
+
+  // Company Match (+50)
   if (company && itemText.includes(company)) {
+    score += 50;
+  }
+
+  // Topic Match (+30)
+  const userTopics = [...(profile.skills || []), ...(profile.technologies || [])].map((t) => t.toLowerCase());
+  const hasTopicMatch = userTopics.some((ut) => ut && itemText.includes(ut)) || itemText.includes('dsa') || itemText.includes('algorithms');
+  if (hasTopicMatch) {
     score += 30;
   }
 
-  // Role Match (+25)
-  if (role && itemText.includes(role)) {
-    score += 25;
-  }
-
-  // Topic Match (+20)
-  const hasTopicMatch = (item.topics || []).some(t => t.toLowerCase().includes('interview') || t.toLowerCase().includes('system design') || t.toLowerCase().includes('dsa'));
-  if (hasTopicMatch) {
+  // Difficulty Match (+20)
+  if (profileDifficulty && itemDifficulty && (profileDifficulty === itemDifficulty || itemDifficulty === 'medium')) {
     score += 20;
-  }
-
-  // Skill Match (+15)
-  const allSkills = [...skills, ...technologies];
-  if (allSkills.some(s => s && itemText.includes(s))) {
-    score += 15;
-  }
-
-  // Interview Type Match (+10)
-  if (interviewTypes.some(it => it && itemText.includes(it))) {
-    score += 10;
   }
 
   return score;
 };
 
 /**
- * Sort results by calculated relevance score in descending order.
+ * Sort results adhering to the ~80% Coding Problems requirement:
+ * Coding Problems are partitioned to fill top positions.
  */
 export const sortByRelevance = (results = [], profile = {}) => {
-  const scored = results.map((item) => ({
-    ...item,
-    relevanceScore: calculateRelevanceScore(item, profile),
-  }));
+  const scored = results.map((item) => {
+    const type = classifyResultItem(item);
+    const isCoding = type === 'Coding Problem';
+    return {
+      ...item,
+      type,
+      isCodingProblem: isCoding,
+      relevanceScore: calculateRelevanceScore(item, profile),
+    };
+  });
 
-  return scored.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  // Separate coding problems from secondary items
+  const codingProblems = scored.filter((item) => item.isCodingProblem).sort((a, b) => b.relevanceScore - a.relevanceScore);
+  const secondaryItems = scored.filter((item) => !item.isCodingProblem).sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+  // Guarantee ~80%+ coding problems at the top
+  return [...codingProblems, ...secondaryItems];
 };
 
 /**
@@ -98,10 +191,10 @@ export const sortByRelevance = (results = [], profile = {}) => {
  */
 export const mergeResults = (githubRes = [], stackRes = [], redditRes = [], codeforcesRes = []) => {
   return [
+    ...codeforcesRes, // Codeforces has top priority
     ...githubRes,
     ...stackRes,
     ...redditRes,
-    ...codeforcesRes,
   ];
 };
 
@@ -118,136 +211,78 @@ export const saveResults = async (conversationId, userId, primaryQuery, results 
       userId: userId || null,
       conversationId,
       query: primaryQuery || 'Combined Interview Search',
-      source: 'all',
+      totalCount: results.length,
       results,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
   } catch (err) {
-    console.error('[Firestore saveResults Error]:', err.message);
+    console.error('[searchOrchestrator saveResults Error]:', err.message);
   }
 };
 
 /**
- * Check if a fresh cache (< 24 hours old) exists in Cloud Firestore.
+ * Main Service Handler for Search Orchestrator.
  */
-export const getCachedSearchResults = async (conversationId) => {
+export const runSearchOrchestrator = async (conversationId, userId = 'guest') => {
   const db = getDb();
-  if (!db || !conversationId) return null;
 
-  try {
-    const docSnap = await db.collection(SEARCH_RESULTS_COLLECTION).doc(conversationId).get();
-    if (!docSnap.exists) return null;
-
-    const data = docSnap.data();
-    const updatedAt = data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt)) : null;
-
-    if (updatedAt && Date.now() - updatedAt.getTime() < CACHE_TTL_MS) {
-      console.log(`[Cache Hit] Returning cached search results for conversationId ${conversationId}`);
-      return data.results || [];
-    }
-  } catch (err) {
-    console.warn('[Cache Check Warning]:', err.message);
-  }
-
-  return null;
-};
-
-/**
- * Master Search Orchestrator method:
- * 1. Checks 24-hr Firestore cache.
- * 2. Loads generated queries & profile context.
- * 3. Runs GitHub, StackOverflow, Reddit, and Codeforces searches concurrently using Promise.all().
- * 4. Normalizes, merges, deduplicates, and ranks results.
- * 5. Saves and returns capped output (max 50 items).
- */
-export const orchestrateSearch = async (conversationId) => {
-  if (!conversationId) {
-    throw new Error('Conversation ID is required for search orchestration.');
-  }
-
-  // Step 1: Check 24-hr Firestore Cache
-  const cachedResults = await getCachedSearchResults(conversationId);
-  if (cachedResults && cachedResults.length > 0) {
-    return cachedResults;
-  }
-
-  const db = getDb();
-  let queries = [];
   let profile = {};
-  let userId = null;
+  let queries = [];
 
-  // Step 2: Load profile and generated queries from Firestore
-  if (db) {
+  if (db && conversationId) {
     try {
       const sessionSnap = await db.collection(SESSIONS_COLLECTION).doc(conversationId).get();
       if (sessionSnap.exists) {
-        const sData = sessionSnap.data();
-        profile = sData.fields || {};
-        userId = sData.userId || null;
+        profile = sessionSnap.data()?.extractedFields || {};
       }
 
       const queriesSnap = await db.collection(QUERIES_COLLECTION).doc(conversationId).get();
       if (queriesSnap.exists) {
-        const qData = queriesSnap.data();
-        queries = qData.queries || [];
+        queries = queriesSnap.data()?.queries || [];
       }
-    } catch (dbErr) {
-      console.warn('[Search Orchestrator Firestore Load Warning]:', dbErr.message);
+    } catch (e) {
+      console.warn('[searchOrchestrator Firestore fetch warning]:', e.message);
     }
   }
 
-  // Fallback default query if queries empty
-  if (!queries.length) {
-    const defaultQuery = `${profile.company || 'Tech'} ${profile.role || 'Developer'} Interview`;
-    queries = [{ category: 'company', query: defaultQuery }];
+  if (!queries || !queries.length) {
+    queries = [
+      { query: `${profile.company || 'Tech'} ${profile.role || 'Software Engineer'} interview coding questions` },
+      { query: `${profile.company || 'Tech'} data structures algorithms coding problem` },
+    ];
   }
 
-  const primaryQuery = queries[0]?.query || `${profile.company || ''} ${profile.role || ''} Interview`.trim();
-
-  // Step 3: Run all searches concurrently using Promise.all()
-  const [githubRes, stackRes, redditRes, codeforcesRes] = await Promise.all([
-    searchGithub(queries, profile).catch((err) => {
-      console.error('[GitHub Provider Error]:', err.message);
-      return [];
-    }),
-    searchStackOverflow(queries, profile).catch((err) => {
-      console.error('[StackOverflow Provider Error]:', err.message);
-      return [];
-    }),
-    searchReddit(queries, profile).catch((err) => {
-      console.error('[Reddit Provider Error]:', err.message);
-      return [];
-    }),
-    searchCodeforces(queries, profile).catch((err) => {
-      console.error('[Codeforces Provider Error]:', err.message);
-      return [];
-    }),
+  const [githubItems, stackItems, redditItems, codeforcesItems] = await Promise.all([
+    searchGithub(queries, profile),
+    searchStackOverflow(queries, profile),
+    searchReddit(queries, profile),
+    searchCodeforces(queries, profile),
   ]);
 
-  // Step 4: Merge, deduplicate, calculate relevance score, and sort
-  const merged = mergeResults(githubRes, stackRes, redditRes, codeforcesRes);
-  const deduplicated = removeDuplicateUrls(merged);
-  const ranked = sortByRelevance(deduplicated, profile);
+  const rawMerged = mergeResults(githubItems, stackItems, redditItems, codeforcesItems);
+  const deduplicated = removeDuplicateUrls(rawMerged);
+  const finalResults = sortByRelevance(deduplicated, profile);
 
-  // Cap combined results to max 50 items
-  const finalResults = ranked.slice(0, 50);
+  await saveResults(conversationId, userId, queries[0]?.query, finalResults);
 
-  // Step 5: Save to Cloud Firestore
-  await saveResults(conversationId, userId, primaryQuery, finalResults);
-
-  return finalResults;
+  return {
+    conversationId,
+    totalCount: finalResults.length,
+    results: finalResults,
+  };
 };
 
+// Export alias for orchestrateSearch
+export const orchestrateSearch = runSearchOrchestrator;
+
 export default {
-  searchGithub,
-  searchStackOverflow,
-  searchReddit,
-  searchCodeforces,
-  mergeResults,
+  classifyResultItem,
   removeDuplicateUrls,
+  calculateRelevanceScore,
   sortByRelevance,
+  mergeResults,
   saveResults,
-  getCachedSearchResults,
+  runSearchOrchestrator,
   orchestrateSearch,
 };

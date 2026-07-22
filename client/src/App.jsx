@@ -4,6 +4,7 @@ import { ConversationProvider } from './contexts/ConversationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import HomePage           from './pages/HomePage';
 import QuestionDetailPage from './pages/QuestionDetailPage';
+import TopicDetailPage    from './pages/TopicDetailPage';
 import ResultsPage        from './pages/ResultsPage';
 import ProblemPage        from './pages/ProblemPage';
 import ProfilePage        from './pages/ProfilePage';
@@ -18,6 +19,8 @@ export default function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/"                 element={<HomePage />} />
+            <Route path="/results"          element={<ResultsPage />} />
+            <Route path="/topic/:topicSlug" element={<TopicDetailPage />} />
             <Route path="/question/:id"     element={<QuestionDetailPage />} />
             <Route path="/question-detail"  element={<QuestionDetailPage />} />
             <Route path="/login"            element={<Login />} />
@@ -25,7 +28,6 @@ export default function App() {
 
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/results"       element={<ResultsPage />} />
               <Route path="/problem/:slug" element={<ProblemPage />} />
               <Route path="/profile"       element={<ProfilePage />} />
             </Route>

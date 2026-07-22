@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import {
-  handleGetQuestionDetail,
+  handleGetQuestionDetails,
   handleToggleBookmark,
   handleGetUserBookmarks,
   handleGetUserRecentlyViewed,
@@ -8,9 +8,10 @@ import {
 
 const router = Router();
 
-// Question Detail (supports both /question-detail and /agent/question-detail)
-router.post('/question-detail', handleGetQuestionDetail);
-router.post('/agent/question-detail', handleGetQuestionDetail);
+// POST /api/question/details & POST /api/agent/question-detail
+router.post('/question/details', handleGetQuestionDetails);
+router.post('/agent/question-detail', handleGetQuestionDetails);
+router.post('/question-detail', handleGetQuestionDetails);
 
 // User Bookmarks & Recently Viewed
 router.post('/user/bookmark', handleToggleBookmark);

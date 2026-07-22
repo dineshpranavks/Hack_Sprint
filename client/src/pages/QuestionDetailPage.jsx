@@ -15,46 +15,66 @@ export default function QuestionDetailPage() {
   const { user } = useAuth();
 
   const passedQuestion = location.state?.questionData || {};
-  const [detail, setDetail] = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeLang, setActiveLang] = useState('java');
+  const [activeLang, setActiveLang] = useState('python');
   const [revealedHints, setRevealedHints] = useState({});
   const [isBookmarked, setIsBookmarked] = useState(false);
 
+  // Accordion collapsed state management
+  const [openSections, setOpenSections] = useState({
+    explanation: true,
+    walkthrough: true,
+    hints: true,
+    testCases: true,
+    solutions: true,
+    complexity: true,
+    insights: true,
+    followUps: true,
+    similar: true,
+    practice: true,
+  });
+
+  const toggleSection = (sectionKey) => {
+    setOpenSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
   useEffect(() => {
-    async function loadQuestionDetail() {
+    async function fetchQuestionDetails() {
       try {
         setLoading(true);
         setError(null);
 
+        const targetId = id || passedQuestion.questionId || passedQuestion.id || passedQuestion.slug;
+
         const payload = {
-          questionId: id || passedQuestion.id || passedQuestion.slug,
-          title: passedQuestion.title || id,
-          company: passedQuestion.company || 'Tech Company',
-          role: passedQuestion.role || 'Software Engineer',
+          questionId: targetId,
+          source: passedQuestion.source || 'all',
+          title: passedQuestion.title || targetId,
+          description: passedQuestion.description || '',
           difficulty: passedQuestion.difficulty || 'Medium',
-          category: passedQuestion.category || 'General',
           topics: passedQuestion.topics || passedQuestion.tags || [],
+          company: passedQuestion.company || 'Tech Company',
           url: passedQuestion.url || null,
           userId: user?.uid || 'guest',
         };
 
-        const res = await axios.post(`${API_BASE_URL}/agent/question-detail`, payload);
-        if (res.data?.detail) {
-          setDetail(res.data.detail);
+        const res = await axios.post(`${API_BASE_URL}/question/details`, payload);
+        if (res.data && (res.data.explanation || res.data.solutions)) {
+          setData(res.data);
         } else {
-          setError('Failed to load question explanation.');
+          setError('Unable to generate detailed explanation.');
         }
       } catch (err) {
         console.error('[QuestionDetailPage Load Error]:', err);
-        setError(err?.response?.data?.error || 'Unable to load detailed explanation.');
+        setError(err?.response?.data?.error || 'Unable to generate detailed explanation.');
       } finally {
         setLoading(false);
       }
     }
 
-    loadQuestionDetail();
+    fetchQuestionDetails();
   }, [id, passedQuestion, user]);
 
   const toggleHint = (level) => {
@@ -67,7 +87,7 @@ export default function QuestionDetailPage() {
       const res = await axios.post(`${API_BASE_URL}/user/bookmark`, {
         userId: user?.uid || 'guest',
         questionId,
-        questionData: detail || passedQuestion,
+        questionData: data || passedQuestion,
       });
       if (res.data?.bookmarked !== undefined) {
         setIsBookmarked(res.data.bookmarked);
@@ -79,8 +99,23 @@ export default function QuestionDetailPage() {
     }
   };
 
-  const qData = detail || passedQuestion;
-  const solutions = detail?.solutions || {};
+  const q = data || {};
+  const explanation = q.explanation || {};
+  const walkthrough = q.walkthrough || {};
+  const hints = q.hints || [];
+  const testCases = q.testCases || [];
+  const solutions = q.solutions || {};
+  const complexity = q.complexity || {};
+  const insights = q.interviewInsights || {};
+  const followUps = q.followUpQuestions || [];
+  const similar = q.similarQuestions || [];
+  const studyAdvice = q.studyAdvice || {};
+  const practicePlatforms = q.practicePlatforms || [];
+
+  const currentTitle = passedQuestion.title || q.title || id || 'Technical Problem';
+  const currentDesc = passedQuestion.description || explanation.whatQuestionAsks || '';
+  const currentTopics = passedQuestion.topics || passedQuestion.tags || q.topics || ['Algorithms'];
+
   const currentSolution = solutions[activeLang] || {};
 
   return (
@@ -89,8 +124,8 @@ export default function QuestionDetailPage() {
 
       <div className="home-stage grid-bg" style={{ minHeight: '100vh', paddingBottom: 80 }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 20px' }}>
-          
-          {/* NAVIGATION HEADER */}
+
+          {/* BACK & BOOKMARK BAR */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
             <button
               onClick={() => navigate(-1)}
@@ -123,11 +158,12 @@ export default function QuestionDetailPage() {
             </button>
           </div>
 
+          {/* LOADING STATE */}
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
-              <div className="btn-spinner" style={{ width: 32, height: 32, margin: '0 auto 16px auto' }} />
-              <h3>Synthesizing AI Knowledge Guide...</h3>
-              <p style={{ fontSize: '0.88rem' }}>Generating problem breakdown, test cases, worked example & multi-language solutions...</p>
+            <div style={{ textAlign: 'center', padding: '80px 0', color: '#94a3b8' }}>
+              <div className="btn-spinner" style={{ width: 36, height: 36, margin: '0 auto 20px auto' }} />
+              <h3 style={{ fontSize: '1.4rem', color: '#f8fafc', fontWeight: 600 }}>Generating AI explanation for "{currentTitle}"...</h3>
+              <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Synthesizing problem breakdown, 10 test cases, step-by-step dry run, & Python/Java/JS solutions...</p>
             </div>
           ) : error ? (
             <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 12, padding: 24, textAlign: 'center', color: '#fca5a5' }}>
@@ -138,86 +174,114 @@ export default function QuestionDetailPage() {
             </div>
           ) : (
             <div className="fade-in">
-              {/* TITLE HEADER CARD */}
+              {/* HEADER TITLE & DESCRIPTION CARD */}
               <div style={{ background: 'rgba(18,22,34,0.9)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 28, marginBottom: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: '0.76rem', fontWeight: 600, background: getDifficultyBg(qData.difficulty), color: getDifficultyColor(qData.difficulty) }}>
-                    {qData.difficulty || 'Medium'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <span style={{ padding: '4px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600, background: getDifficultyBg(passedQuestion.difficulty || q.difficulty), color: getDifficultyColor(passedQuestion.difficulty || q.difficulty) }}>
+                    {passedQuestion.difficulty || q.difficulty || 'Medium'}
                   </span>
-                  <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: '0.76rem', fontWeight: 600, background: 'rgba(56,189,248,0.12)', color: '#38bdf8' }}>
-                    {qData.category || 'Algorithms'}
-                  </span>
-                  {qData.company && (
-                    <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: '0.76rem', fontWeight: 600, background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>
-                      🏢 {qData.company}
+                  {currentTopics.map((topic, idx) => (
+                    <span key={idx} style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.76rem', fontWeight: 600, background: 'rgba(56,189,248,0.12)', color: '#38bdf8' }}>
+                      {topic}
+                    </span>
+                  ))}
+                  {passedQuestion.company && (
+                    <span style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.76rem', fontWeight: 600, background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>
+                      🏢 {passedQuestion.company}
                     </span>
                   )}
                 </div>
 
-                <h1 style={{ color: '#f8fafc', fontSize: '1.8rem', fontWeight: 700, margin: '0 0 12px 0' }}>
-                  {qData.title}
+                <h1 style={{ color: '#f8fafc', fontSize: '1.85rem', fontWeight: 700, margin: '0 0 14px 0', lineHeight: 1.3 }}>
+                  {currentTitle}
                 </h1>
 
-                <div style={{ display: 'flex', gap: 16, color: '#94a3b8', fontSize: '0.85rem' }}>
-                  <span>Freq: <strong style={{ color: '#f1f5f9' }}>{qData.estimatedInterviewFrequency || 'High'}</strong></span>
-                  <span>Study Time: <strong style={{ color: '#f1f5f9' }}>{qData.estimatedStudyTime || '45 mins'}</strong></span>
-                </div>
+                {currentDesc && (
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 16, color: '#cbd5e1', fontSize: '0.92rem', lineHeight: 1.6 }}>
+                    <strong>Problem Statement:</strong> {currentDesc}
+                  </div>
+                )}
               </div>
 
-              {/* PROBLEM BREAKDOWN & EXPECTATIONS */}
-              <div style={{ background: 'rgba(18,22,34,0.85)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 24, marginBottom: 24 }}>
-                <h3 style={{ color: '#38bdf8', fontSize: '1.2rem', fontWeight: 700, margin: '0 0 12px 0' }}>
-                  💡 Problem Overview & Interview Expectations
-                </h3>
+              {/* SECTION 1: PROBLEM OVERVIEW & EXPLANATION */}
+              <AccordionSection title="💡 1. Problem Explanation" isOpen={openSections.explanation} onToggle={() => toggleSection('explanation')}>
                 <p style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 16 }}>
-                  {detail.problemExplanation?.whatProblemIsAsking}
+                  {explanation.whatQuestionAsks || currentDesc}
                 </p>
 
-                {detail.problemExplanation?.keyObservations && (
+                {explanation.importantObservations && (
                   <div style={{ marginBottom: 16 }}>
-                    <h4 style={{ color: '#f8fafc', fontSize: '0.95rem', fontWeight: 600, marginBottom: 8 }}>Key Observations:</h4>
-                    <ul style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: 1.5, paddingLeft: 20, margin: 0 }}>
-                      {detail.problemExplanation.keyObservations.map((obs, idx) => (
+                    <h5 style={{ color: '#f8fafc', fontSize: '0.92rem', fontWeight: 600, marginBottom: 8 }}>Important Observations:</h5>
+                    <ul style={{ color: '#94a3b8', fontSize: '0.88rem', lineHeight: 1.5, paddingLeft: 20, margin: 0 }}>
+                      {explanation.importantObservations.map((obs, idx) => (
                         <li key={idx} style={{ marginBottom: 4 }}>{obs}</li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {detail.problemExplanation?.interviewExpectations && (
-                  <div style={{ background: 'rgba(34,197,94,0.08)', borderLeft: '3px solid #22c55e', padding: '10px 14px', borderRadius: '0 8px 8px 0', color: '#86efac', fontSize: '0.88rem' }}>
-                    <strong>Interview Expectation:</strong> {detail.problemExplanation.interviewExpectations}
+                {explanation.commonMistakes && (
+                  <div style={{ marginBottom: 16 }}>
+                    <h5 style={{ color: '#fca5a5', fontSize: '0.92rem', fontWeight: 600, marginBottom: 8 }}>Common Mistakes to Avoid:</h5>
+                    <ul style={{ color: '#fca5a5', fontSize: '0.88rem', lineHeight: 1.5, paddingLeft: 20, margin: 0 }}>
+                      {explanation.commonMistakes.map((mis, idx) => (
+                        <li key={idx} style={{ marginBottom: 4 }}>{mis}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
-              </div>
 
-              {/* WORKED EXAMPLE WALKTHROUGH */}
-              {detail.workedExample && (
-                <div style={{ background: 'rgba(18,22,34,0.85)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 24, marginBottom: 24 }}>
-                  <h3 style={{ color: '#f59e0b', fontSize: '1.2rem', fontWeight: 700, margin: '0 0 12px 0' }}>
-                    🔍 Worked Example Walkthrough
-                  </h3>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: 14, marginBottom: 12, fontFamily: 'monospace', fontSize: '0.88rem', color: '#38bdf8' }}>
-                    <div><strong>Input:</strong> {detail.workedExample.input}</div>
-                    <div><strong>Output:</strong> {detail.workedExample.output}</div>
+                {explanation.interviewExpectations && (
+                  <div style={{ background: 'rgba(34,197,94,0.08)', borderLeft: '3px solid #22c55e', padding: '10px 14px', borderRadius: '0 8px 8px 0', color: '#86efac', fontSize: '0.88rem' }}>
+                    <strong>Interview Expectation:</strong> {explanation.interviewExpectations}
                   </div>
-                  <pre style={{ color: '#cbd5e1', fontSize: '0.88rem', lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-                    {detail.workedExample.stepByStepExplanation}
+                )}
+              </AccordionSection>
+
+              {/* SECTION 2: STEP-BY-STEP WALKTHROUGH & DRY RUN */}
+              {walkthrough.exampleInput && (
+                <AccordionSection title="🔍 2. Step-by-Step Walkthrough & Dry Run" isOpen={openSections.walkthrough} onToggle={() => toggleSection('walkthrough')}>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: 14, marginBottom: 12, fontFamily: 'monospace', fontSize: '0.88rem', color: '#38bdf8' }}>
+                    <div><strong>Input:</strong> {walkthrough.exampleInput}</div>
+                    <div><strong>Expected Output:</strong> {walkthrough.exampleOutput}</div>
+                  </div>
+                  <pre style={{ color: '#cbd5e1', fontSize: '0.88rem', lineHeight: 1.55, margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                    {walkthrough.dryRun}
                   </pre>
-                </div>
+                </AccordionSection>
               )}
 
-              {/* 10 TEST CASES ACCORDION */}
-              {detail.testCases && detail.testCases.length > 0 && (
-                <div style={{ background: 'rgba(18,22,34,0.85)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 24, marginBottom: 24 }}>
-                  <h3 style={{ color: '#a855f7', fontSize: '1.2rem', fontWeight: 700, margin: '0 0 16px 0' }}>
-                    🧪 Generated Test Cases ({detail.testCases.length})
-                  </h3>
+              {/* SECTION 3: 5 PROGRESSIVE HINTS */}
+              {hints.length > 0 && (
+                <AccordionSection title={`🔑 3. Progressive Hints (${hints.length})`} isOpen={openSections.hints} onToggle={() => toggleSection('hints')}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {hints.map((h, idx) => (
+                      <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#facc15', fontWeight: 600, fontSize: '0.88rem' }}>Hint #{h.level || idx + 1}</span>
+                          <button onClick={() => toggleHint(idx)} style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.8rem', cursor: 'pointer' }}>
+                            {revealedHints[idx] ? 'Hide Hint' : 'Reveal Hint'}
+                          </button>
+                        </div>
+                        {revealedHints[idx] && (
+                          <div style={{ marginTop: 8, color: '#cbd5e1', fontSize: '0.88rem', lineHeight: 1.4 }}>
+                            {h.hint}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </AccordionSection>
+              )}
+
+              {/* SECTION 4: 10 TEST CASES GRID */}
+              {testCases.length > 0 && (
+                <AccordionSection title={`🧪 4. Generated Test Cases (${testCases.length})`} isOpen={openSections.testCases} onToggle={() => toggleSection('testCases')}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-                    {detail.testCases.map((tc, idx) => (
+                    {testCases.map((tc, idx) => (
                       <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 14 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f8fafc' }}>Test Case #{idx + 1}</span>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f8fafc' }}>Case #{idx + 1}</span>
                           <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4, background: 'rgba(168,85,247,0.15)', color: '#c084fc' }}>{tc.type || 'Standard'}</span>
                         </div>
                         <div style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: '#94a3b8', marginBottom: 4 }}>In: {tc.input}</div>
@@ -226,17 +290,14 @@ export default function QuestionDetailPage() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </AccordionSection>
               )}
 
-              {/* CODE SOLUTIONS IN TABBED VIEW */}
-              <div style={{ background: 'rgba(18,22,34,0.85)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 24, marginBottom: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <h3 style={{ color: '#4ade80', fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>
-                    💻 Optimal Solutions
-                  </h3>
+              {/* SECTION 5 & 6: SOLUTIONS IN 3 LANGUAGES & COMPLEXITY */}
+              <AccordionSection title="💻 5 & 6. Code Solutions & Complexity" isOpen={openSections.solutions} onToggle={() => toggleSection('solutions')}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    {['java', 'python', 'javascript'].map((lang) => (
+                    {['python', 'java', 'javascript'].map((lang) => (
                       <button
                         key={lang}
                         onClick={() => setActiveLang(lang)}
@@ -252,19 +313,18 @@ export default function QuestionDetailPage() {
                           color: activeLang === lang ? '#0f172a' : '#94a3b8',
                         }}
                       >
-                        {lang === 'javascript' ? 'JavaScript' : lang}
+                        {lang === 'javascript' ? 'JavaScript' : lang === 'python' ? 'Python' : 'Java'}
                       </button>
                     ))}
+                  </div>
+
+                  <div style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+                    Time: <strong style={{ color: '#4ade80' }}>{currentSolution.timeComplexity || complexity.time || 'O(N)'}</strong> | Space: <strong style={{ color: '#4ade80' }}>{currentSolution.spaceComplexity || complexity.space || 'O(N)'}</strong>
                   </div>
                 </div>
 
                 {currentSolution.code ? (
                   <div>
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: '0.82rem', color: '#94a3b8' }}>
-                      <span>Time Complexity: <strong style={{ color: '#4ade80' }}>{currentSolution.timeComplexity}</strong></span>
-                      <span>Space Complexity: <strong style={{ color: '#4ade80' }}>{currentSolution.spaceComplexity}</strong></span>
-                    </div>
-
                     <pre style={{ background: '#090d16', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 16, color: '#f1f5f9', fontFamily: 'monospace', fontSize: '0.88rem', overflowX: 'auto', margin: '0 0 12px 0' }}>
                       {currentSolution.code}
                     </pre>
@@ -274,63 +334,140 @@ export default function QuestionDetailPage() {
                     </p>
                   </div>
                 ) : (
-                  <div style={{ color: '#64748b', fontSize: '0.88rem' }}>Solution available in Java, Python, and JavaScript.</div>
+                  <div style={{ color: '#64748b', fontSize: '0.88rem' }}>Solution code available in Python, Java, and JavaScript.</div>
                 )}
-              </div>
+              </AccordionSection>
 
-              {/* PROGRESSIVE HINTS */}
-              {detail.hints && detail.hints.length > 0 && (
-                <div style={{ background: 'rgba(18,22,34,0.85)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 24, marginBottom: 24 }}>
-                  <h3 style={{ color: '#facc15', fontSize: '1.2rem', fontWeight: 700, margin: '0 0 14px 0' }}>
-                    🔑 Progressive Hints
-                  </h3>
+              {/* SECTION 7: INTERVIEW INSIGHTS */}
+              {insights.whyCompaniesAskThis && (
+                <AccordionSection title="🏢 7. Interview Insights" isOpen={openSections.insights} onToggle={() => toggleSection('insights')}>
+                  <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: 1.5, marginBottom: 12 }}>
+                    <strong>Why Companies Ask This:</strong> {insights.whyCompaniesAskThis}
+                  </p>
+                  {insights.conceptsEvaluated && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      {insights.conceptsEvaluated.map((c, idx) => (
+                        <span key={idx} style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(168,85,247,0.12)', color: '#c084fc', fontSize: '0.78rem' }}>
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ color: '#94a3b8', fontSize: '0.84rem' }}>
+                    Typical Round: <strong style={{ color: '#f1f5f9' }}>{insights.typicalRound}</strong>
+                  </div>
+                </AccordionSection>
+              )}
+
+              {/* SECTION 8: 5 COMMON FOLLOW-UP QUESTIONS */}
+              {followUps.length > 0 && (
+                <AccordionSection title={`❓ 8. Common Interview Follow-Up Questions (${followUps.length})`} isOpen={openSections.followUps} onToggle={() => toggleSection('followUps')}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {detail.hints.map((h, idx) => (
-                      <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#facc15', fontWeight: 600, fontSize: '0.88rem' }}>Hint #{h.level || idx + 1}</span>
-                          <button onClick={() => toggleHint(idx)} style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.8rem', cursor: 'pointer' }}>
-                            {revealedHints[idx] ? 'Hide' : 'Reveal Hint'}
-                          </button>
-                        </div>
-                        {revealedHints[idx] && (
-                          <div style={{ marginTop: 8, color: '#cbd5e1', fontSize: '0.88rem', lineHeight: 1.4 }}>
-                            {h.hint}
-                          </div>
-                        )}
+                    {followUps.map((fu, idx) => (
+                      <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 12 }}>
+                        <div style={{ color: '#f8fafc', fontWeight: 600, fontSize: '0.9rem', marginBottom: 4 }}>{idx + 1}. {fu.question}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.82rem' }}>{fu.rationale}</div>
                       </div>
                     ))}
                   </div>
-                </div>
+                </AccordionSection>
               )}
 
-              {/* ORIGINAL PRACTICE LINK BUTTON */}
-              {qData.url && (
-                <div style={{ textAlign: 'center', margin: '32px 0' }}>
-                  <a
-                    href={qData.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'inline-block',
-                      padding: '12px 28px',
-                      background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
-                      color: '#0f172a',
-                      borderRadius: 10,
-                      fontWeight: 700,
-                      fontSize: '1rem',
-                      textDecoration: 'none',
-                      boxShadow: '0 4px 14px rgba(56,189,248,0.4)',
-                    }}
-                  >
-                    Practice on Original Platform ↗
-                  </a>
-                </div>
+              {/* SECTION 9: 5 SIMILAR QUESTIONS & STUDY ADVICE */}
+              {similar.length > 0 && (
+                <AccordionSection title={`🎯 9. Similar Questions & Study Advice (${similar.length})`} isOpen={openSections.similar} onToggle={() => toggleSection('similar')}>
+                  {studyAdvice.whatToStudyNext && (
+                    <div style={{ background: 'rgba(56,189,248,0.08)', borderLeft: '3px solid #38bdf8', padding: '10px 14px', borderRadius: '0 8px 8px 0', color: '#bae6fd', fontSize: '0.88rem', marginBottom: 16 }}>
+                      <strong>What to study next:</strong> {studyAdvice.whatToStudyNext}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                    {similar.map((sq, idx) => (
+                      <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.88rem' }}>{sq.title}</span>
+                          <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4, background: getDifficultyBg(sq.difficulty), color: getDifficultyColor(sq.difficulty) }}>{sq.difficulty}</span>
+                        </div>
+                        <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: 0 }}>{sq.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </AccordionSection>
               )}
+
+              {/* SECTION 10: AVAILABLE TO PRACTICE BUTTONS */}
+              <AccordionSection title="🌐 10. Available To Practice Platforms" isOpen={openSections.practice} onToggle={() => toggleSection('practice')}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  {practicePlatforms.length > 0 ? (
+                    practicePlatforms.map((p, idx) => (
+                      <a
+                        key={idx}
+                        href={p.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: '10px 20px',
+                          background: 'linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.2))',
+                          border: '1px solid rgba(56,189,248,0.4)',
+                          borderRadius: 10,
+                          color: '#38bdf8',
+                          fontWeight: 600,
+                          fontSize: '0.9rem',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        {p.label || `Practice on ${p.platform}`} ↗
+                      </a>
+                    ))
+                  ) : (
+                    <a
+                      href={passedQuestion.url || q.url || 'https://codeforces.com/problemset'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '10px 20px',
+                        background: 'linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.2))',
+                        border: '1px solid rgba(56,189,248,0.4)',
+                        borderRadius: 10,
+                        color: '#38bdf8',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      Practice on Original Platform ↗
+                    </a>
+                  )}
+                </div>
+              </AccordionSection>
+
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AccordionSection({ title, isOpen, onToggle, children }) {
+  return (
+    <div style={{ background: 'rgba(18,22,34,0.85)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, marginBottom: 20, overflow: 'hidden' }}>
+      <div
+        onClick={onToggle}
+        style={{
+          padding: '18px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justify: 'space-between',
+          cursor: 'pointer',
+          background: 'rgba(255,255,255,0.02)',
+        }}
+      >
+        <h3 style={{ color: '#f8fafc', fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>{title}</h3>
+        <span style={{ color: '#94a3b8', fontSize: '1.1rem', fontWeight: 600 }}>{isOpen ? '▲' : '▼'}</span>
+      </div>
+      {isOpen && <div style={{ padding: '0 24px 24px 24px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>{children}</div>}
     </div>
   );
 }

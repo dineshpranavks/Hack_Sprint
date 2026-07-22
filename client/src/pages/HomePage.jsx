@@ -40,6 +40,12 @@ export default function HomePage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, loading]);
 
+  useEffect(() => {
+    if (completed) {
+      navigate('/results');
+    }
+  }, [completed, navigate]);
+
   const handleSearch = async (overrideQuery) => {
     const q = (typeof overrideQuery === 'string' ? overrideQuery : query).trim();
     if (!q || loading) return;
@@ -57,7 +63,10 @@ export default function HomePage() {
     }
 
     setQuery('');
-    await sendMessage(q);
+    const res = await sendMessage(q);
+    if (res?.completed) {
+      navigate('/results');
+    }
   };
 
   const fillSearch = (q) => {

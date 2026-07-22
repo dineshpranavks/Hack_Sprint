@@ -18,56 +18,46 @@ const ANALYSIS_COLLECTION = 'analysisResults';
 const SEARCH_RESULTS_COLLECTION = 'searchResults';
 
 /**
- * Generate queries using aiAgent service.
+ * Generate queries using aiAgent service with fallback.
  */
 export const generateQueries = async (conversationId, fields, userId) => {
-  return await runGenerateSearchQueries(conversationId, fields, userId);
+  try {
+    return await runGenerateSearchQueries(conversationId, fields, userId);
+  } catch (err) {
+    console.warn('[generateQueries Warning]:', err.message);
+    return [
+      { topic: 'Dynamic Programming', query: `${fields?.company || 'Tech'} Dynamic Programming Problems`, priorityRating: 5 },
+      { topic: 'Graphs', query: `${fields?.company || 'Tech'} Graph BFS DFS Problems`, priorityRating: 5 },
+    ];
+  }
 };
 
 /**
- * Perform parallel multi-source search across GitHub, StackOverflow, Reddit, and Codeforces.
+ * Execute Search using searchOrchestrator with fallback.
  */
-export const searchAllSources = async (queries = [], profile = {}) => {
-  const [githubRes, stackRes, redditRes, codeforcesRes] = await Promise.all([
-    searchGithub(queries, profile).catch((err) => {
-      console.warn('[Workflow GitHub Search Warning]:', err.message);
-      return [];
-    }),
-    searchStackOverflow(queries, profile).catch((err) => {
-      console.warn('[Workflow StackOverflow Search Warning]:', err.message);
-      return [];
-    }),
-    searchReddit(queries, profile).catch((err) => {
-      console.warn('[Workflow Reddit Search Warning]:', err.message);
-      return [];
-    }),
-    searchCodeforces(queries, profile).catch((err) => {
-      console.warn('[Workflow Codeforces Search Warning]:', err.message);
-      return [];
-    }),
-  ]);
-
-  return mergeResults(githubRes, stackRes, redditRes, codeforcesRes);
+export const search = async (conversationId, userId) => {
+  try {
+    return await orchestrateSearch(conversationId, userId);
+  } catch (err) {
+    console.warn('[search Warning]:', err.message);
+    return { conversationId, totalCount: 0, results: [] };
+  }
 };
 
 /**
- * Merge, deduplicate, and rank search results.
+ * Analyze search results using aiAgent service with fallback.
  */
-export const mergeResults = (githubRes = [], stackRes = [], redditRes = [], codeforcesRes = [], profile = {}) => {
-  const combined = [...githubRes, ...stackRes, ...redditRes, ...codeforcesRes];
-  const deduplicated = removeDuplicateUrls(combined);
-  return sortByRelevance(deduplicated, profile).slice(0, 50);
+export const analyze = async (conversationId) => {
+  try {
+    return await runAnalyzeResults(conversationId);
+  } catch (err) {
+    console.warn('[analyze Warning]:', err.message);
+    return { summary: {}, topics: [] };
+  }
 };
 
 /**
- * Execute Gemini intelligence analysis.
- */
-export const analyzeResults = async (conversationId) => {
-  return await runAnalyzeResults(conversationId);
-};
-
-/**
- * Check Firestore cache for existing analysis results.
+ * Check if analysis results already exist in Cloud Firestore for a conversation.
  */
 export const getCachedAnalysis = async (conversationId) => {
   const db = getDb();
@@ -75,79 +65,78 @@ export const getCachedAnalysis = async (conversationId) => {
 
   try {
     const analysisSnap = await db.collection(ANALYSIS_COLLECTION).doc(conversationId).get();
-    if (!analysisSnap.exists) return null;
-
-    const analysisData = analysisSnap.data();
-
-    // Load matching search results
-    let questions = [];
     const searchSnap = await db.collection(SEARCH_RESULTS_COLLECTION).doc(conversationId).get();
-    if (searchSnap.exists) {
-      questions = searchSnap.data()?.results || [];
-    }
 
-    return {
-      analysis: analysisData,
-      questions,
-    };
+    if (analysisSnap.exists) {
+      return {
+        analysis: analysisSnap.data(),
+        questions: searchSnap.exists ? searchSnap.data().results || [] : [],
+      };
+    }
   } catch (err) {
-    console.warn('[getCachedAnalysis Warning]:', err.message);
-    return null;
+    console.warn('[getCachedAnalysis Firestore Warning]:', err.message);
   }
+  return null;
 };
 
 /**
- * Build unified response payload for the frontend.
+ * Format unified response structure expected by client.
  */
-export const buildFrontendResponse = (fields = {}, analysis = {}, questions = []) => {
+export const buildFrontendResponse = (profile = {}, analysis = {}, questions = []) => {
   return {
     status: 'completed',
     completed: true,
     profile: {
-      company: fields.company || null,
-      role: fields.role || null,
-      experience: fields.experience || null,
-      skills: fields.skills || [],
-      technologies: fields.technologies || [],
-      interviewTypes: fields.interviewTypes || [],
+      company: profile.company || null,
+      role: profile.role || null,
+      experience: profile.experience || null,
+      skills: profile.skills || [],
+      technologies: profile.technologies || [],
+      interviewTypes: profile.interviewTypes || [],
+      seniority: profile.seniority || profile.experience || null,
     },
     analysis: {
       summary: analysis.summary || {},
+      topics: analysis.topics || [],
       categories: analysis.categories || [],
-      learningRoadmap: analysis.learningRoadmap || [],
       priorityTopics: analysis.priorityTopics || [],
+      learningRoadmap: analysis.learningRoadmap || [],
       recommendations: analysis.recommendations || [],
       companyInsights: analysis.companyInsights || [],
-      weakAreas: analysis.weakAreas || [],
       interviewStrategy: analysis.interviewStrategy || [],
+      weakAreas: analysis.weakAreas || [],
       similarTopics: analysis.similarTopics || [],
     },
-    questions,
+    questions: questions || [],
   };
 };
 
 /**
- * Master Controller Method:
- * Executes full workflow: Conversation -> Query Generation -> Parallel Search -> AI Analysis -> Dashboard Payload
+ * Master Controller Method for POST /api/agent/message.
+ * Supports both string userMessage and options object { message, userMessage, conversationId, userId }.
  */
-export const processWorkflow = async ({ message, conversationId = null, userId = null }) => {
-  if (!message || typeof message !== 'string' || !message.trim()) {
-    throw new Error('User message is required.');
+export const processWorkflow = async (userMessageParam, conversationIdParam = null, userIdParam = 'guest') => {
+  let userMessage = typeof userMessageParam === 'string' ? userMessageParam : userMessageParam?.message || userMessageParam?.userMessage || '';
+  let conversationId = typeof userMessageParam === 'object' ? userMessageParam?.conversationId || conversationIdParam : conversationIdParam;
+  let userId = typeof userMessageParam === 'object' ? userMessageParam?.userId || userIdParam : userIdParam || 'guest';
+
+  const trimmedMsg = (userMessage || '').trim();
+  if (!trimmedMsg) {
+    throw new Error('Message content is required.');
   }
 
-  const trimmedMsg = message.trim();
+  const db = getDb();
   let existingFields = {};
   let existingHistory = [];
 
-  // Step 1: Reload existing session from Firestore if conversationId is provided
-  const db = getDb();
-  if (conversationId && db) {
+  // Step 1: Load existing session if conversationId provided
+  if (db && conversationId) {
     try {
       const docSnap = await db.collection(SESSIONS_COLLECTION).doc(conversationId).get();
       if (docSnap.exists) {
         const data = docSnap.data();
-        existingFields = data.fields || {};
-        existingHistory = data.chatHistory || [];
+        existingFields = data.extractedFields || data.fields || {};
+        existingHistory = data.messages || data.chatHistory || [];
       }
     } catch (e) {
       console.warn('[processWorkflow Session Load Warning]:', e.message);
@@ -160,42 +149,26 @@ export const processWorkflow = async ({ message, conversationId = null, userId =
   ];
 
   // Step 2: Extract Intent
-  const intentResult = await extractIntent(currentChatHistory, existingFields);
-
-  if (!intentResult) {
-    const fallbackQuestion = "I'm having trouble understanding your request. Could you rephrase it?";
-    const savedDoc = await updateConversation({
-      conversationId,
-      userId,
-      userMessage: trimmedMsg,
-      assistantResponse: fallbackQuestion,
-      updatedFields: existingFields,
-      isCompleted: false,
-    });
-
-    return {
-      status: 'collecting',
-      completed: false,
-      conversation: savedDoc,
-      nextQuestion: fallbackQuestion,
-    };
+  let intentResult = null;
+  try {
+    intentResult = await extractIntent(currentChatHistory, existingFields);
+  } catch (e) {
+    console.warn('[processWorkflow extractIntent warning]:', e.message);
   }
 
-  const { fields: updatedFields, missingFields } = intentResult;
-  const { completed } = validateConversation(updatedFields);
+  const updatedFields = intentResult?.fields || intentResult || existingFields;
+  const { completed, missingFields } = validateConversation(updatedFields);
 
   // Step 3: Check if conversation is still collecting missing fields
   if (!completed) {
-    const nextQuestion = await generateFollowUpQuestion(currentChatHistory, missingFields, updatedFields);
+    let nextQuestion = "Could you please specify your target company, role, and experience level?";
+    try {
+      nextQuestion = await generateFollowUpQuestion(updatedFields, missingFields);
+    } catch (fqErr) {
+      console.warn('[generateFollowUpQuestion Warning]:', fqErr.message);
+    }
 
-    const savedDoc = await updateConversation({
-      conversationId,
-      userId,
-      userMessage: trimmedMsg,
-      assistantResponse: nextQuestion,
-      updatedFields,
-      isCompleted: false,
-    });
+    const savedDoc = await updateConversation(conversationId, currentChatHistory, updatedFields, userId);
 
     return {
       status: 'collecting',
@@ -207,16 +180,9 @@ export const processWorkflow = async ({ message, conversationId = null, userId =
 
   // Step 4: Criteria Completed! Update conversation status to completed
   const activeConversationId = conversationId || `conv-${Date.now()}`;
-  const savedDoc = await updateConversation({
-    conversationId: activeConversationId,
-    userId,
-    userMessage: trimmedMsg,
-    assistantResponse: '',
-    updatedFields,
-    isCompleted: true,
-  });
+  const savedDoc = await updateConversation(activeConversationId, currentChatHistory, updatedFields, userId);
 
-  const finalConversationId = savedDoc.id || activeConversationId;
+  const finalConversationId = activeConversationId;
 
   // Step 5: Check Firestore for existing cached analysis
   const cached = await getCachedAnalysis(finalConversationId);
@@ -233,27 +199,42 @@ export const processWorkflow = async ({ message, conversationId = null, userId =
   console.log(`[Workflow Orchestrator] Executing end-to-end workflow for conversationId ${finalConversationId}...`);
 
   // Step 6A: Generate Search Queries
-  const queries = await generateQueries(finalConversationId, updatedFields, userId);
+  let queries = [];
+  try {
+    queries = await generateQueries(finalConversationId, updatedFields, userId);
+  } catch (qErr) {
+    console.warn('[Workflow Orchestrator generateQueries warning]:', qErr.message);
+  }
 
   // Step 6B: Search All Sources (GitHub, StackOverflow, Reddit, Codeforces)
-  let searchResults = await orchestrateSearch(finalConversationId);
+  let searchResults = { results: [] };
+  try {
+    searchResults = await search(finalConversationId, userId);
+  } catch (sErr) {
+    console.warn('[Workflow Orchestrator search warning]:', sErr.message);
+  }
 
-  // Step 6C: AI Intelligence Engine Analysis
-  const analysis = await analyzeResults(finalConversationId);
+  // Step 6C: Analyze Search Results using Gemini
+  let analysisResult = {};
+  try {
+    analysisResult = await analyze(finalConversationId);
+  } catch (aErr) {
+    console.warn('[Workflow Orchestrator analyze warning]:', aErr.message);
+  }
 
-  // Step 6D: Return unified response
+  // Step 7: Build & Return Unified Payload
   return {
     conversationId: finalConversationId,
     conversation: savedDoc,
-    ...buildFrontendResponse(updatedFields, analysis || {}, searchResults || []),
+    ...buildFrontendResponse(updatedFields, analysisResult, searchResults.results || []),
   };
 };
 
 export default {
-  processWorkflow,
   generateQueries,
-  searchAllSources,
-  mergeResults,
-  analyzeResults,
+  search,
+  analyze,
+  getCachedAnalysis,
   buildFrontendResponse,
+  processWorkflow,
 };

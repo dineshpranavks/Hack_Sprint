@@ -19,6 +19,10 @@ export default function QuestionCard({ question = {}, userId = 'guest' }) {
   const frequency = question.estimatedInterviewFrequency || 'High';
   const studyTime = question.estimatedStudyTime || '30-45 mins';
 
+  // Determine if item is a solvable coding problem
+  const itemType = question.type || (question.source === 'codeforces' || question.isCodingProblem !== false ? 'Coding Problem' : 'Resource');
+  const isCodingProblem = itemType === 'Coding Problem' || question.isCodingProblem === true || question.source === 'codeforces';
+
   const handleToggleBookmark = async (e) => {
     e.stopPropagation();
     try {
@@ -42,6 +46,13 @@ export default function QuestionCard({ question = {}, userId = 'guest' }) {
   };
 
   const handleViewDetails = () => {
+    if (!isCodingProblem) {
+      if (question.url) {
+        window.open(question.url, '_blank');
+      }
+      return;
+    }
+
     navigate(`/question/${encodeURIComponent(questionId)}`, {
       state: { questionData: question },
     });
@@ -52,7 +63,7 @@ export default function QuestionCard({ question = {}, userId = 'guest' }) {
       className="question-card fade-in"
       style={{
         background: 'rgba(18,22,34,0.85)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        border: isCodingProblem ? '1px solid rgba(56,189,248,0.2)' : '1px solid rgba(255,255,255,0.08)',
         borderRadius: 14,
         padding: 20,
         display: 'flex',
@@ -63,20 +74,35 @@ export default function QuestionCard({ question = {}, userId = 'guest' }) {
       }}
     >
       <div>
-        {/* TOP ROW: DIFFICULTY & BOOKMARK TOGGLE */}
+        {/* TOP ROW: DIFFICULTY & ITEM TYPE BADGE & BOOKMARK TOGGLE */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <span
-            style={{
-              padding: '3px 10px',
-              borderRadius: 6,
-              fontSize: '0.74rem',
-              fontWeight: 600,
-              background: getDifficultyBg(difficulty),
-              color: getDifficultyColor(difficulty),
-            }}
-          >
-            {difficulty}
-          </span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span
+              style={{
+                padding: '3px 10px',
+                borderRadius: 6,
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                background: getDifficultyBg(difficulty),
+                color: getDifficultyColor(difficulty),
+              }}
+            >
+              {difficulty}
+            </span>
+
+            <span
+              style={{
+                padding: '3px 8px',
+                borderRadius: 6,
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                background: isCodingProblem ? 'rgba(34,197,94,0.15)' : 'rgba(148,163,184,0.15)',
+                color: isCodingProblem ? '#4ade80' : '#cbd5e1',
+              }}
+            >
+              {isCodingProblem ? '🧩 Coding Problem' : `📄 ${itemType}`}
+            </span>
+          </div>
 
           <button
             onClick={handleToggleBookmark}
@@ -133,11 +159,11 @@ export default function QuestionCard({ question = {}, userId = 'guest' }) {
         {/* WHY RECOMMENDED */}
         <div
           style={{
-            background: 'rgba(56,189,248,0.08)',
-            borderLeft: '3px solid #38bdf8',
+            background: isCodingProblem ? 'rgba(56,189,248,0.08)' : 'rgba(255,255,255,0.03)',
+            borderLeft: isCodingProblem ? '3px solid #38bdf8' : '3px solid #64748b',
             padding: '8px 10px',
             borderRadius: '0 6px 6px 0',
-            color: '#bae6fd',
+            color: isCodingProblem ? '#bae6fd' : '#cbd5e1',
             fontSize: '0.8rem',
             marginBottom: 14,
             lineHeight: 1.4,
@@ -167,25 +193,51 @@ export default function QuestionCard({ question = {}, userId = 'guest' }) {
 
         {/* ACTION BUTTONS */}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={handleViewDetails}
-            style={{
-              flex: 1,
-              padding: '9px 14px',
-              background: '#38bdf8',
-              color: '#0f172a',
-              border: 'none',
-              borderRadius: 8,
-              fontSize: '0.84rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'background 0.2s',
-            }}
-          >
-            View Details
-          </button>
+          {isCodingProblem ? (
+            <button
+              onClick={handleViewDetails}
+              style={{
+                flex: 1,
+                padding: '9px 14px',
+                background: '#38bdf8',
+                color: '#0f172a',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: '0.84rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+              }}
+            >
+              View Details
+            </button>
+          ) : (
+            <a
+              href={question.url || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                flex: 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '9px 14px',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 8,
+                color: '#cbd5e1',
+                fontSize: '0.84rem',
+                fontWeight: 600,
+                textDecoration: 'none',
+                textAlign: 'center',
+              }}
+            >
+              Open Resource ↗
+            </a>
+          )}
 
-          {question.url && (
+          {isCodingProblem && question.url && (
             <a
               href={question.url}
               target="_blank"
@@ -207,7 +259,7 @@ export default function QuestionCard({ question = {}, userId = 'guest' }) {
                 textAlign: 'center',
               }}
             >
-              Practice on Original Platform ↗
+              Practice on Platform ↗
             </a>
           )}
         </div>

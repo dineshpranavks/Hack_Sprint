@@ -31,27 +31,55 @@ export function ConversationProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Debug Logger Helper (Step 9)
+  const logDebugState = (tag, payload = {}) => {
+    console.log(`[Debug State Transition] [${tag}]`, {
+      conversationId,
+      loading,
+      completed,
+      historyLength: chatHistory.length,
+      hasAnalysis: !!analysisResults,
+      hasQuestions: searchResults.length > 0,
+      ...payload,
+    });
+  };
+
   // Restore session from Firestore on refresh
   const reloadSession = useCallback(async (id) => {
     if (!id) return;
     try {
       setLoading(true);
+      logDebugState('ReloadSession Init', { id });
       const res = await axios.get(`${API_BASE_URL}/agent/session/${id}`);
       if (res.data?.conversation) {
         const conv = res.data.conversation;
         setConversationId(conv.id);
-        setChatHistory(conv.chatHistory || []);
-        setFields(conv.fields || {});
-        setCompleted(!!res.data.completed);
-        const lastMsg = (conv.chatHistory || []).slice().reverse().find(m => m.role === 'assistant');
-        if (lastMsg && !res.data.completed) {
-          setNextQuestion(lastMsg.content);
+
+        const incomingHistory = conv.chatHistory || conv.messages || [];
+        if (incomingHistory.length > 0) {
+          setChatHistory(incomingHistory);
         }
+
+        const incomingFields = conv.extractedFields || conv.fields || {};
+        if (Object.keys(incomingFields).length > 0) {
+          setFields(incomingFields);
+        }
+        
+        const isComp = !!res.data.completed || conv.status === 'completed' || !!conv.completed;
+        setCompleted(isComp);
+
+        if (isComp) {
+          if (res.data.analysis) setAnalysisResults(res.data.analysis);
+          if (res.data.questions) setSearchResults(res.data.questions);
+          setNextQuestion(null);
+        } else {
+          const lastMsg = (incomingHistory || []).slice().reverse().find(m => m.role === 'assistant' || m.sender === 'assistant');
+          if (lastMsg) setNextQuestion(lastMsg.content || lastMsg.text);
+        }
+        logDebugState('ReloadSession Success', { isComp });
       }
     } catch (err) {
       console.warn('[ConversationSession Restore Note]:', err?.response?.data || err.message);
-      localStorage.removeItem(STORAGE_KEY);
-      setConversationId(null);
     } finally {
       setLoading(false);
     }
@@ -59,10 +87,10 @@ export function ConversationProvider({ children }) {
 
   useEffect(() => {
     const savedId = localStorage.getItem(STORAGE_KEY);
-    if (savedId) {
+    if (savedId && !conversationId) {
       reloadSession(savedId);
     }
-  }, [reloadSession]);
+  }, [reloadSession, conversationId]);
 
   /**
    * Send single request to POST /api/agent/message.
@@ -74,7 +102,9 @@ export function ConversationProvider({ children }) {
     const trimmedMsg = messageText.trim();
     setError(null);
     setLoading(true);
-    setCurrentStep('Extracting interview criteria...');
+    setCurrentStep('Extracting interview criteria & running search...');
+
+    logDebugState('SendMessage Start', { trimmedMsg });
 
     // Optimistically push user message to local history
     const tempUserMsg = { role: 'user', content: trimmedMsg, timestamp: new Date().toISOString() };
@@ -96,22 +126,27 @@ export function ConversationProvider({ children }) {
         localStorage.setItem(STORAGE_KEY, activeId);
       }
 
-      if (data.conversation) {
-        setChatHistory(data.conversation.chatHistory || []);
-        setFields(data.conversation.fields || data.profile || {});
-      } else if (data.profile) {
-        setFields(data.profile);
+      // Safely preserve existing history if backend array is empty
+      const serverHistory = data.conversation?.chatHistory || data.conversation?.messages || data.chatHistory || data.messages;
+      if (serverHistory && Array.isArray(serverHistory) && serverHistory.length > 0) {
+        setChatHistory(serverHistory);
       }
 
-      setCompleted(!!data.completed);
+      const serverFields = data.conversation?.fields || data.conversation?.extractedFields || data.profile;
+      if (serverFields) {
+        setFields(serverFields);
+      }
 
-      if (!data.completed) {
+      const isCompleted = !!data.completed || data.status === 'completed';
+      setCompleted(isCompleted);
+
+      if (!isCompleted) {
         // Step 1: Still collecting criteria
         if (data.nextQuestion) {
           setNextQuestion(data.nextQuestion);
         }
       } else {
-        // Step 2: Criteria complete! Master workflow orchestrator executed
+        // Step 2: Criteria complete! Dashboard recommendations populated
         setNextQuestion(null);
         if (data.analysis) {
           setAnalysisResults(data.analysis);
@@ -122,6 +157,7 @@ export function ConversationProvider({ children }) {
         setCurrentStep('Dashboard ready!');
       }
 
+      logDebugState('SendMessage Complete', { isCompleted, activeId });
       return data;
     } catch (err) {
       console.error('[sendMessage Agent Error]:', err);
@@ -140,6 +176,7 @@ export function ConversationProvider({ children }) {
   };
 
   const resetConversation = () => {
+    logDebugState('ResetConversation');
     localStorage.removeItem(STORAGE_KEY);
     setConversationId(null);
     setChatHistory([]);
@@ -158,28 +195,27 @@ export function ConversationProvider({ children }) {
     setSearchResults([]);
     setAnalysisResults(null);
     setCurrentStep('');
-    setError(null);
-  };
-
-  const value = {
-    conversationId,
-    chatHistory,
-    fields,
-    completed,
-    nextQuestion,
-    generatedQueries,
-    searchResults,
-    analysisResults,
-    currentStep,
-    loading,
-    error,
-    sendMessage,
-    resetConversation,
-    reloadSession,
   };
 
   return (
-    <ConversationContext.Provider value={value}>
+    <ConversationContext.Provider
+      value={{
+        conversationId,
+        chatHistory,
+        fields,
+        completed,
+        nextQuestion,
+        generatedQueries,
+        searchResults,
+        analysisResults,
+        currentStep,
+        loading,
+        error,
+        sendMessage,
+        reloadSession,
+        resetConversation,
+      }}
+    >
       {children}
     </ConversationContext.Provider>
   );

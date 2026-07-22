@@ -1,5 +1,5 @@
 import { getDb } from '../config/db.js';
-import { processWorkflow } from '../services/workflowOrchestrator.service.js';
+import { processWorkflow, getCachedAnalysis } from '../services/workflowOrchestrator.service.js';
 import {
   generateSearchQueries,
   analyzeResults,
@@ -58,13 +58,24 @@ export const getAgentSession = async (req, res, next) => {
     }
 
     const data = docSnap.data();
+    const isCompleted = data.status === 'completed' || !!data.completed;
+
+    let cachedData = null;
+    if (isCompleted) {
+      cachedData = await getCachedAnalysis(conversationId);
+    }
+
     return res.status(200).json({
       status: data.status || 'active',
-      completed: !!data.completed,
+      completed: isCompleted,
       conversation: {
         id: docSnap.id,
+        chatHistory: data.messages || data.chatHistory || [],
+        fields: data.extractedFields || data.fields || {},
         ...data,
       },
+      analysis: cachedData?.analysis || null,
+      questions: cachedData?.questions || [],
     });
   } catch (error) {
     console.error('[getAgentSession Controller Error]:', error);
@@ -98,7 +109,7 @@ export const handleGenerateQueries = async (req, res, next) => {
     return res.status(200).json({ status: 'success', conversationId, queries });
   } catch (error) {
     console.error('[handleGenerateQueries Error]:', error);
-    return res.status(500).json({ error: error.message || 'Failed to generate queries.' });
+    return res.status(500).json({ error: 'Failed to generate queries.' });
   }
 };
 
@@ -112,11 +123,11 @@ export const handleAnalyzeResults = async (req, res, next) => {
       return res.status(400).json({ error: 'Conversation ID is required.' });
     }
 
-    const analysis = await analyzeResults(conversationId);
-    return res.status(200).json({ status: 'success', conversationId, analysis });
+    const analysisPayload = await analyzeResults(conversationId);
+    return res.status(200).json({ status: 'success', conversationId, ...analysisPayload });
   } catch (error) {
     console.error('[handleAnalyzeResults Error]:', error);
-    return res.status(500).json({ error: error.message || 'Failed to analyze results.' });
+    return res.status(500).json({ error: 'Failed to analyze search results.' });
   }
 };
 
