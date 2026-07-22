@@ -5,6 +5,212 @@ import QuestionCard from '../components/QuestionCard';
 import { useConversation } from '../hooks/useConversation';
 
 const FALLBACK_TOPIC_PROBLEMS = {
+  'object-oriented-programming': [
+    {
+      id: 'what-is-polymorphism',
+      title: 'What is Polymorphism? Explain Compile-Time vs Runtime Polymorphism',
+      difficulty: 'Easy',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Object Oriented Programming', 'OOP', 'Polymorphism'],
+      reasonRecommended: 'Core OOP concept tested in almost every technical interview.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '25 mins',
+    },
+    {
+      id: 'abstraction-vs-encapsulation',
+      title: 'Difference Between Abstraction and Encapsulation with Examples',
+      difficulty: 'Easy',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Object Oriented Programming', 'OOP', 'Encapsulation'],
+      reasonRecommended: 'Fundamental architectural distinction required for OOP design rounds.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '20 mins',
+    },
+    {
+      id: 'solid-principles-explained',
+      title: 'Explain SOLID Principles with Real-World System Examples',
+      difficulty: 'Medium',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Object Oriented Programming', 'SOLID', 'Design Patterns'],
+      reasonRecommended: 'Crucial for mid/senior level software engineering interviews.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '45 mins',
+    },
+    {
+      id: 'virtual-functions-cplusplus',
+      title: 'How Virtual Functions and VTABLE Work under the Hood in C++',
+      difficulty: 'Hard',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Object Oriented Programming', 'Virtual Functions', 'VTABLE'],
+      reasonRecommended: 'High-frequency low-level OOP question for Backend & Systems roles.',
+      estimatedInterviewFrequency: 'High',
+      estimatedStudyTime: '40 mins',
+    },
+    {
+      id: 'diamond-problem-multiple-inheritance',
+      title: 'What is the Diamond Problem in Multiple Inheritance and How to Resolve It?',
+      difficulty: 'Medium',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Object Oriented Programming', 'Inheritance'],
+      reasonRecommended: 'Tests understanding of class hierarchy resolution and interface design.',
+      estimatedInterviewFrequency: 'High',
+      estimatedStudyTime: '30 mins',
+    },
+  ],
+  'database-management-systems': [
+    {
+      id: 'dbms-normalization-forms',
+      title: 'Database Normalization: 1NF, 2NF, 3NF, and BCNF Explained',
+      difficulty: 'Medium',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Database Management Systems', 'DBMS', 'SQL'],
+      reasonRecommended: 'Essential database design theory asked in all backend rounds.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '35 mins',
+    },
+    {
+      id: 'acid-properties-transactions',
+      title: 'Explain ACID Properties in DBMS with Real-World Transaction Examples',
+      difficulty: 'Easy',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Database Management Systems', 'ACID', 'Transactions'],
+      reasonRecommended: 'Core database transaction reliability principles.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '25 mins',
+    },
+    {
+      id: 'dbms-b-tree-indexing',
+      title: 'How B-Tree & B+ Tree Database Indexing Works to Optimize Queries',
+      difficulty: 'Hard',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Database Management Systems', 'Indexing', 'B-Trees'],
+      reasonRecommended: 'Crucial for database performance tuning & query optimization rounds.',
+      estimatedInterviewFrequency: 'High',
+      estimatedStudyTime: '45 mins',
+    },
+    {
+      id: 'transaction-isolation-levels',
+      title: 'Transaction Isolation Levels and Concurrency Anomalies (Dirty Reads, Phantom Reads)',
+      difficulty: 'Hard',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Database Management Systems', 'Concurrency', 'Transactions'],
+      reasonRecommended: 'Tested in distributed systems and high-throughput backend interviews.',
+      estimatedInterviewFrequency: 'High',
+      estimatedStudyTime: '50 mins',
+    },
+    {
+      id: 'sql-joins-inner-left-right-outer',
+      title: 'Explain SQL Joins: Inner, Left, Right, and Full Outer Joins with Examples',
+      difficulty: 'Easy',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Database Management Systems', 'SQL', 'Joins'],
+      reasonRecommended: 'Standard SQL query writing question for engineering candidates.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '20 mins',
+    },
+  ],
+  'operating-systems': [
+    {
+      id: 'process-vs-thread',
+      title: 'Process vs Thread: Memory Management, Context Switching, and Overhead',
+      difficulty: 'Easy',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Operating Systems', 'OS', 'Concurrency'],
+      reasonRecommended: 'Most popular operating systems question in technical interviews.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '25 mins',
+    },
+    {
+      id: 'deadlock-conditions-avoidance',
+      title: 'What is a Deadlock? 4 Necessary Conditions and Banker\'s Algorithm',
+      difficulty: 'Medium',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Operating Systems', 'Deadlock', 'Concurrency'],
+      reasonRecommended: 'Standard OS concurrency management question.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '35 mins',
+    },
+    {
+      id: 'mutex-vs-semaphore',
+      title: 'Difference Between Mutex and Semaphore (Counting vs Binary Semaphore)',
+      difficulty: 'Medium',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Operating Systems', 'Synchronization', 'Mutex'],
+      reasonRecommended: 'Tests multi-threading synchronization mechanics.',
+      estimatedInterviewFrequency: 'High',
+      estimatedStudyTime: '30 mins',
+    },
+    {
+      id: 'virtual-memory-paging-segmentation',
+      title: 'Virtual Memory, Paging, Page Faults, and Segmentation Explained',
+      difficulty: 'Hard',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Operating Systems', 'Memory Management', 'Paging'],
+      reasonRecommended: 'Evaluates physical vs virtual memory address translation.',
+      estimatedInterviewFrequency: 'High',
+      estimatedStudyTime: '45 mins',
+    },
+  ],
+  'computer-networks': [
+    {
+      id: 'osi-model-7-layers',
+      title: 'Explain the 7 Layers of OSI Model and Their Protocol Functions',
+      difficulty: 'Easy',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Computer Networks', 'OSI Model', 'Networking'],
+      reasonRecommended: 'Foundational networking model asked in initial technical screenings.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '25 mins',
+    },
+    {
+      id: 'tcp-vs-udp-protocol-comparison',
+      title: 'TCP vs UDP: 3-Way Handshake, Reliability, Header Size, and Use Cases',
+      difficulty: 'Easy',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Computer Networks', 'TCP', 'UDP'],
+      reasonRecommended: 'Core transport layer comparison question.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '25 mins',
+    },
+    {
+      id: 'http-vs-https-tls-handshake',
+      title: 'HTTP vs HTTPS: SSL/TLS Handshake, Encryption, and Certificates',
+      difficulty: 'Medium',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Computer Networks', 'HTTP', 'Security'],
+      reasonRecommended: 'Critical web network security question for backend & full-stack roles.',
+      estimatedInterviewFrequency: 'High',
+      estimatedStudyTime: '35 mins',
+    },
+    {
+      id: 'dns-resolution-process',
+      title: 'What Happens Step-by-Step When You Type a URL in Browser (DNS Resolution)?',
+      difficulty: 'Medium',
+      source: 'technical',
+      isCodingProblem: true,
+      topics: ['Computer Networks', 'DNS', 'Web Architecture'],
+      reasonRecommended: 'Classic end-to-end web request lifecycle question.',
+      estimatedInterviewFrequency: 'Very High',
+      estimatedStudyTime: '35 mins',
+    },
+  ],
   'dynamic-programming': [
     {
       id: 'cut-ribbon',
@@ -39,188 +245,6 @@ const FALLBACK_TOPIC_PROBLEMS = {
       estimatedInterviewFrequency: 'High',
       estimatedStudyTime: '45 mins',
     },
-    {
-      id: 'dice-combinations',
-      title: 'Dice Combinations / Coin Change DP',
-      difficulty: 'Easy',
-      source: 'codeforces',
-      topics: ['Dynamic Programming', 'Combinatorics'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Fundamental 1D DP memoization problem.',
-      estimatedInterviewFrequency: 'Very High',
-      estimatedStudyTime: '30 mins',
-    },
-    {
-      id: 'maximum-subarray-sum',
-      title: 'Maximum Subarray Sum (Kadane DP)',
-      difficulty: 'Easy',
-      source: 'codeforces',
-      topics: ['Dynamic Programming', 'Arrays'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Standard linear DP algorithm required for initial phone screens.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '25 mins',
-    },
-    {
-      id: 'edit-distance-dp',
-      title: 'Edit Distance (String Alignment DP)',
-      difficulty: 'Hard',
-      source: 'codeforces',
-      topics: ['Dynamic Programming', 'Strings'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: '2D matrix DP problem asked in senior engineering loops.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '60 mins',
-    },
-  ],
-  'graphs': [
-    {
-      id: 'lunar-new-year-and-a-wander',
-      title: 'Lunar New Year and a Wander (Priority Graph Traversal)',
-      difficulty: 'Medium',
-      source: 'codeforces',
-      topics: ['Graphs', 'BFS/DFS', 'Priority Queue'],
-      url: 'https://codeforces.com/problemset/problem/1106/D',
-      reasonRecommended: 'Combines min-heap priority queue with BFS graph traversal.',
-      estimatedInterviewFrequency: 'Very High',
-      estimatedStudyTime: '45 mins',
-    },
-    {
-      id: 'two-buttons',
-      title: 'Two Buttons (State Space Shortest Path BFS)',
-      difficulty: 'Medium',
-      source: 'codeforces',
-      topics: ['Graphs', 'BFS'],
-      url: 'https://codeforces.com/problemset/problem/520/B',
-      reasonRecommended: 'Classic state transformation shortest path search.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '35 mins',
-    },
-    {
-      id: 'keys-and-rooms',
-      title: 'Keys and Rooms (Connected Components DFS)',
-      difficulty: 'Easy',
-      source: 'codeforces',
-      topics: ['Graphs', 'DFS'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Foundational graph reachability problem.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '25 mins',
-    },
-    {
-      id: 'network-delay-time',
-      title: 'Network Delay Time (Dijkstra Algorithm)',
-      difficulty: 'Medium',
-      source: 'codeforces',
-      topics: ['Graphs', 'Dijkstra', 'Shortest Path'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Essential weighted graph shortest path algorithm.',
-      estimatedInterviewFrequency: 'Very High',
-      estimatedStudyTime: '50 mins',
-    },
-    {
-      id: 'word-ladder',
-      title: 'Word Ladder (Shortest Transformation Graph BFS)',
-      difficulty: 'Hard',
-      source: 'codeforces',
-      topics: ['Graphs', 'BFS', 'Strings'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Bidirectional BFS graph traversal problem.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '60 mins',
-    },
-  ],
-  'trees': [
-    {
-      id: 'binary-tree-inorder',
-      title: 'Binary Tree Inorder Traversal',
-      difficulty: 'Easy',
-      source: 'codeforces',
-      topics: ['Trees', 'Traversal'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Core tree recursion and stack traversal problem.',
-      estimatedInterviewFrequency: 'Very High',
-      estimatedStudyTime: '20 mins',
-    },
-    {
-      id: 'k-tree',
-      title: 'k-Tree (Tree DP & Recursive Traversal)',
-      difficulty: 'Medium',
-      source: 'codeforces',
-      topics: ['Trees', 'DP'],
-      url: 'https://codeforces.com/problemset/problem/431/C',
-      reasonRecommended: 'Tree path construction and recursion state tracking.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '40 mins',
-    },
-    {
-      id: 'lowest-common-ancestor',
-      title: 'Lowest Common Ancestor of a Binary Tree',
-      difficulty: 'Medium',
-      source: 'codeforces',
-      topics: ['Trees', 'BST'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Tested in almost all top tech company coding rounds.',
-      estimatedInterviewFrequency: 'Very High',
-      estimatedStudyTime: '40 mins',
-    },
-    {
-      id: 'serialize-deserialize-binary-tree',
-      title: 'Serialize and Deserialize Binary Tree',
-      difficulty: 'Hard',
-      source: 'codeforces',
-      topics: ['Trees', 'Design'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'System design meets tree structure serialization.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '60 mins',
-    },
-  ],
-  'sliding-window': [
-    {
-      id: 'longest-substring-without-repeating',
-      title: 'Longest Substring Without Repeating Characters',
-      difficulty: 'Medium',
-      source: 'codeforces',
-      topics: ['Sliding Window', 'HashMap'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'High frequency variable-size sliding window question.',
-      estimatedInterviewFrequency: 'Very High',
-      estimatedStudyTime: '35 mins',
-    },
-    {
-      id: 'two-sum',
-      title: 'Two Sum & Two Pointer Optimization',
-      difficulty: 'Easy',
-      source: 'codeforces',
-      topics: ['Two Pointers', 'HashMap'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Most famous coding question asked across all tech companies.',
-      estimatedInterviewFrequency: 'Very High',
-      estimatedStudyTime: '20 mins',
-    },
-    {
-      id: '3sum-problem',
-      title: '3Sum (Sorted Two Pointers)',
-      difficulty: 'Medium',
-      source: 'codeforces',
-      topics: ['Two Pointers', 'Sorting'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Tests array sorting and duplicate avoidance techniques.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '40 mins',
-    },
-    {
-      id: 'minimum-window-substring',
-      title: 'Minimum Window Substring',
-      difficulty: 'Hard',
-      source: 'codeforces',
-      topics: ['Sliding Window', 'HashMap'],
-      url: 'https://codeforces.com/problemset',
-      reasonRecommended: 'Hard sliding window optimization problem.',
-      estimatedInterviewFrequency: 'High',
-      estimatedStudyTime: '55 mins',
-    },
   ],
 };
 
@@ -234,31 +258,34 @@ export default function TopicDetailPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
 
-    const topics = analysisResults?.topics || [];
+    const allTopics = [
+      ...(analysisResults?.dsaTopics || []),
+      ...(analysisResults?.technicalTopics || []),
+      ...(analysisResults?.topics || []),
+    ];
+
     const rawSlug = (topicSlug || '').toLowerCase();
     const formattedSlug = rawSlug.replace(/[^a-z0-9]+/g, '-');
 
-    const found = topics.find((t) => {
+    const found = allTopics.find((t) => {
       const nameSlug = t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
       return nameSlug === formattedSlug || t.name.toLowerCase().includes(rawSlug.replace(/-/g, ' '));
     });
 
-    // Match searchResults by topic tags or titles
     const matchingFromSearch = (searchResults || []).filter((q) => {
-      const text = `${q.title} ${(q.topics || []).join(' ')} ${(q.tags || []).join(' ')}`.toLowerCase();
-      return text.includes(rawSlug.replace(/-/g, ' ')) || (rawSlug.includes('dp') && text.includes('dp'));
+      const text = `${q.title} ${(q.topics || []).join(' ')} ${(q.tags || []).join(' ')} ${q.subject || ''}`.toLowerCase();
+      return text.includes(rawSlug.replace(/-/g, ' '));
     });
 
-    // Lookup fallback questions if needed
     let catalogFallback = [];
-    if (formattedSlug.includes('dynamic') || formattedSlug.includes('dp')) {
-      catalogFallback = FALLBACK_TOPIC_PROBLEMS['dynamic-programming'];
-    } else if (formattedSlug.includes('graph') || formattedSlug.includes('bfs') || formattedSlug.includes('dfs')) {
-      catalogFallback = FALLBACK_TOPIC_PROBLEMS['graphs'];
-    } else if (formattedSlug.includes('tree')) {
-      catalogFallback = FALLBACK_TOPIC_PROBLEMS['trees'];
-    } else if (formattedSlug.includes('window') || formattedSlug.includes('pointer')) {
-      catalogFallback = FALLBACK_TOPIC_PROBLEMS['sliding-window'];
+    if (formattedSlug.includes('object') || formattedSlug.includes('oop')) {
+      catalogFallback = FALLBACK_TOPIC_PROBLEMS['object-oriented-programming'];
+    } else if (formattedSlug.includes('database') || formattedSlug.includes('dbms')) {
+      catalogFallback = FALLBACK_TOPIC_PROBLEMS['database-management-systems'];
+    } else if (formattedSlug.includes('operating') || formattedSlug.includes('os')) {
+      catalogFallback = FALLBACK_TOPIC_PROBLEMS['operating-systems'];
+    } else if (formattedSlug.includes('network')) {
+      catalogFallback = FALLBACK_TOPIC_PROBLEMS['computer-networks'];
     } else {
       catalogFallback = FALLBACK_TOPIC_PROBLEMS['dynamic-programming'];
     }
@@ -269,7 +296,6 @@ export default function TopicDetailPage() {
       ...catalogFallback,
     ];
 
-    // Remove duplicates by title/id
     const seen = new Set();
     const uniqueQuestions = mergedQuestions.filter((q) => {
       const key = (q.id || q.title || '').toLowerCase().trim();
@@ -278,12 +304,12 @@ export default function TopicDetailPage() {
       return true;
     });
 
-    const readableName = found?.name || (topicSlug ? topicSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'DSA Topic');
+    const readableName = found?.name || (topicSlug ? topicSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Technical Subject');
 
     setTopicObj({
       name: readableName,
       priorityRating: found?.priorityRating || 5,
-      explanation: found?.explanation || `High-frequency coding problems for ${fields?.company || 'Tech'} interview preparation.`,
+      explanation: found?.explanation || `Essential ${readableName} questions for ${fields?.company || 'Tech'} interview preparation.`,
       questionCount: uniqueQuestions.length,
       estimatedInterviewFrequency: found?.estimatedInterviewFrequency || 'Very High',
       questions: uniqueQuestions,
@@ -295,7 +321,7 @@ export default function TopicDetailPage() {
       <div className="page-root">
         <Navbar />
         <div style={{ maxWidth: 1000, margin: '60px auto', textAlign: 'center', color: '#94a3b8' }}>
-          <h2>Loading DSA Topic Details...</h2>
+          <h2>Loading Technical Subject Details...</h2>
         </div>
       </div>
     );
@@ -337,7 +363,7 @@ export default function TopicDetailPage() {
         <div
           style={{
             background: 'linear-gradient(135deg, rgba(20,26,42,0.95), rgba(15,20,32,0.98))',
-            border: '1px solid rgba(56,189,248,0.3)',
+            border: '1px solid rgba(168,85,247,0.3)',
             borderRadius: 16,
             padding: '28px 32px',
             marginBottom: 32,
@@ -346,8 +372,8 @@ export default function TopicDetailPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 12 }}>
             <div>
-              <span style={{ fontSize: '0.8rem', color: '#4ade80', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>
-                DSA Topic Module
+              <span style={{ fontSize: '0.8rem', color: '#c084fc', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Interview Module
               </span>
               <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: '#f8fafc', margin: '4px 0 0 0' }}>
                 {topicObj.name}
@@ -377,8 +403,8 @@ export default function TopicDetailPage() {
             </div>
             <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
             <div>
-              <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase' }}>Total Problems</span>
-              <div style={{ color: '#4ade80', fontWeight: 700, fontSize: '0.95rem' }}>{questions.length} Coding Problems</div>
+              <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase' }}>Total Questions</span>
+              <div style={{ color: '#4ade80', fontWeight: 700, fontSize: '0.95rem' }}>{questions.length} Questions</div>
             </div>
             <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
             <div>
@@ -392,7 +418,7 @@ export default function TopicDetailPage() {
         {easyQuestions.length > 0 && (
           <section style={{ marginBottom: 36 }}>
             <h3 style={{ color: '#4ade80', fontSize: '1.2rem', fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>🟢</span> Easy Coding Problems ({easyQuestions.length})
+              <span>🟢</span> Easy Questions ({easyQuestions.length})
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {easyQuestions.map((q, idx) => (
@@ -406,7 +432,7 @@ export default function TopicDetailPage() {
         {mediumQuestions.length > 0 && (
           <section style={{ marginBottom: 36 }}>
             <h3 style={{ color: '#facc15', fontSize: '1.2rem', fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>🟡</span> Medium Coding Problems ({mediumQuestions.length})
+              <span>🟡</span> Medium Questions ({mediumQuestions.length})
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {mediumQuestions.map((q, idx) => (
@@ -420,7 +446,7 @@ export default function TopicDetailPage() {
         {hardQuestions.length > 0 && (
           <section style={{ marginBottom: 36 }}>
             <h3 style={{ color: '#f87171', fontSize: '1.2rem', fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>🔴</span> Hard Coding Problems ({hardQuestions.length})
+              <span>🔴</span> Hard Questions ({hardQuestions.length})
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {hardQuestions.map((q, idx) => (

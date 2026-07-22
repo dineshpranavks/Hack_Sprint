@@ -145,7 +145,7 @@ export const extractIntent = async (messages = [], existingFields = {}) => {
  */
 export const generateFollowUpQuestion = async (fields = {}, missingFields = []) => {
   if (!missingFields.length) {
-    return "Great! I have all the details needed. Generating your custom DSA Topic recommendations now!";
+    return "Great! I have all the details needed. Generating your custom DSA & Technical interview recommendations now!";
   }
 
   const ai = getGeminiClient();
@@ -166,7 +166,7 @@ export const generateFollowUpQuestion = async (fields = {}, missingFields = []) 
     });
     return response.text?.trim() || `Could you please provide your ${missingFields.join(', ')}?`;
   } catch (err) {
-    return `Could you please share your ${missingFields.join(', ')} so I can build your tailored DSA prep kit?`;
+    return `Could you please share your ${missingFields.join(', ')} so I can build your tailored interview prep kit?`;
   }
 };
 
@@ -217,7 +217,7 @@ export const updateConversation = async (conversationId, messages = [], fields =
 };
 
 /**
- * Generate 20 to 40 DSA topic search queries using Gemini from completed profile fields.
+ * Generate 20 to 40 search queries covering both DSA and Technical subjects.
  */
 export const generateSearchQueries = async (conversationId, fields = {}, userId = null) => {
   const { completed } = validateConversation(fields);
@@ -228,16 +228,13 @@ export const generateSearchQueries = async (conversationId, fields = {}, userId 
   const ai = getGeminiClient();
   const company = fields.company || 'Tech';
   const defaultQueries = [
-    { topic: 'Dynamic Programming', query: `${company} Dynamic Programming Problems`, priorityRating: 5 },
-    { topic: 'Graphs', query: `${company} Graph BFS DFS Problems`, priorityRating: 5 },
-    { topic: 'Sliding Window', query: `${company} Sliding Window Two Pointer Problems`, priorityRating: 5 },
-    { topic: 'Binary Search', query: `${company} Binary Search Problems`, priorityRating: 4 },
-    { topic: 'Trees & BST', query: `${company} Binary Tree Problems`, priorityRating: 4 },
-    { topic: 'Heap & Priority Queue', query: `${company} Heap Priority Queue Problems`, priorityRating: 4 },
-    { topic: 'Backtracking', query: `${company} Backtracking Recursion Problems`, priorityRating: 4 },
-    { topic: 'HashMap & Strings', query: `${company} HashMap Array String Problems`, priorityRating: 4 },
-    { topic: 'Prefix Sum', query: `${company} Prefix Sum Range Query Problems`, priorityRating: 3 },
-    { topic: 'Union Find', query: `${company} Union Find DSU Problems`, priorityRating: 3 },
+    { category: 'dsa', topic: 'Dynamic Programming', query: `${company} Dynamic Programming Problems`, priorityRating: 5 },
+    { category: 'dsa', topic: 'Graphs', query: `${company} Graph BFS DFS Problems`, priorityRating: 5 },
+    { category: 'dsa', topic: 'Sliding Window', query: `${company} Sliding Window Two Pointer Problems`, priorityRating: 5 },
+    { category: 'technical', topic: 'Object Oriented Programming', query: `${company} OOP Interview Questions`, priorityRating: 5 },
+    { category: 'technical', topic: 'Database Management Systems', query: `${company} DBMS SQL Interview Questions`, priorityRating: 5 },
+    { category: 'technical', topic: 'Operating Systems', query: `${company} Operating Systems Questions`, priorityRating: 4 },
+    { category: 'technical', topic: 'Computer Networks', query: `${company} Computer Networks Questions`, priorityRating: 4 },
   ];
 
   if (!ai) {
@@ -273,7 +270,6 @@ export const generateSearchQueries = async (conversationId, fields = {}, userId 
 
   const queries = (parsed && Array.isArray(parsed.queries)) ? parsed.queries : defaultQueries;
 
-  // Save to Cloud Firestore
   const db = getDb();
   if (db && conversationId) {
     try {
@@ -295,17 +291,16 @@ export const generateSearchQueries = async (conversationId, fields = {}, userId 
 };
 
 /**
- * Group search results into DSA topics for fallbacks.
+ * Default fallback DSA Topics.
  */
 function buildDefaultDsaTopics(profile = {}, searchResults = []) {
   const company = profile.company || 'Tech Company';
   const role = profile.role || 'Software Engineer';
 
-  // Group items by topic tags
   const dpQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('dp') || t.toLowerCase().includes('dynamic')));
   const graphQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('graph') || t.toLowerCase().includes('dfs') || t.toLowerCase().includes('bfs')));
   const treeQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('tree')));
-  const otherQuestions = searchResults.filter(r => !dpQuestions.includes(r) && !graphQuestions.includes(r) && !treeQuestions.includes(r));
+  const otherQuestions = searchResults.filter(r => !dpQuestions.includes(r) && !graphQuestions.includes(r) && !treeQuestions.includes(r) && r.source !== 'technical');
 
   return [
     {
@@ -354,7 +349,68 @@ function buildDefaultDsaTopics(profile = {}, searchResults = []) {
 }
 
 /**
- * Execute Phase 4 end-to-end intelligence analysis (DSA Topic Centric).
+ * Default fallback Technical Interview Subjects (OOP, DBMS, OS, Computer Networks).
+ */
+function buildDefaultTechnicalTopics(profile = {}, searchResults = []) {
+  const company = profile.company || 'Tech Company';
+  const role = profile.role || 'Software Engineer';
+
+  const techItems = searchResults.filter(r => r.source === 'technical' || r.subject);
+  const oopItems = techItems.filter(r => (r.subject || '').includes('Object Oriented') || (r.topics || []).includes('OOP'));
+  const dbmsItems = techItems.filter(r => (r.subject || '').includes('Database') || (r.topics || []).includes('DBMS'));
+  const osItems = techItems.filter(r => (r.subject || '').includes('Operating Systems') || (r.topics || []).includes('OS'));
+  const netItems = techItems.filter(r => (r.subject || '').includes('Networks') || (r.topics || []).includes('Networking'));
+
+  return [
+    {
+      name: 'Object Oriented Programming',
+      priorityRating: 5,
+      explanation: `Core OOP design principles (Polymorphism, Inheritance, Encapsulation, SOLID) tested at ${company}.`,
+      questionCount: oopItems.length || 5,
+      estimatedInterviewFrequency: 'Very High',
+      questions: oopItems.length ? oopItems : [
+        { id: 'what-is-polymorphism', title: 'What is Polymorphism? Explain Compile-Time vs Runtime Polymorphism', source: 'technical', difficulty: 'Easy', reasonRecommended: `Core OOP concept tested in ${company} interviews.` },
+        { id: 'solid-principles-explained', title: 'Explain SOLID Principles with Real-World System Examples', source: 'technical', difficulty: 'Medium', reasonRecommended: `Crucial for mid/senior level design rounds at ${company}.` },
+      ],
+    },
+    {
+      name: 'Database Management Systems',
+      priorityRating: 5,
+      explanation: `Relational database fundamentals, SQL optimization, ACID compliance, and indexing.`,
+      questionCount: dbmsItems.length || 5,
+      estimatedInterviewFrequency: 'Very High',
+      questions: dbmsItems.length ? dbmsItems : [
+        { id: 'dbms-normalization-forms', title: 'Database Normalization: 1NF, 2NF, 3NF, and BCNF Explained', source: 'technical', difficulty: 'Medium', reasonRecommended: `Essential database theory for ${role} roles at ${company}.` },
+        { id: 'acid-properties-transactions', title: 'Explain ACID Properties in DBMS with Real-World Transaction Examples', source: 'technical', difficulty: 'Easy', reasonRecommended: `Core transaction reliability principles.` },
+      ],
+    },
+    {
+      name: 'Operating Systems',
+      priorityRating: 4,
+      explanation: `Process concurrency, thread synchronization, memory paging, and deadlock handling.`,
+      questionCount: osItems.length || 4,
+      estimatedInterviewFrequency: 'High',
+      questions: osItems.length ? osItems : [
+        { id: 'process-vs-thread', title: 'Process vs Thread: Memory Management & Context Switching', source: 'technical', difficulty: 'Easy', reasonRecommended: `Most popular OS concurrency question.` },
+        { id: 'deadlock-conditions-avoidance', title: 'What is a Deadlock? 4 Necessary Conditions & Banker\'s Algorithm', source: 'technical', difficulty: 'Medium', reasonRecommended: `Standard OS concurrency management question.` },
+      ],
+    },
+    {
+      name: 'Computer Networks',
+      priorityRating: 4,
+      explanation: `Networking protocol stack (TCP/UDP, HTTP/HTTPS, OSI 7-Layer, DNS, Sockets).`,
+      questionCount: netItems.length || 4,
+      estimatedInterviewFrequency: 'High',
+      questions: netItems.length ? netItems : [
+        { id: 'tcp-vs-udp-protocol-comparison', title: 'TCP vs UDP: 3-Way Handshake, Reliability, and Header Size', source: 'technical', difficulty: 'Easy', reasonRecommended: `Core transport layer protocol comparison.` },
+        { id: 'http-vs-https-tls-handshake', title: 'HTTP vs HTTPS: SSL/TLS Handshake & Encryption', source: 'technical', difficulty: 'Medium', reasonRecommended: `Critical web network security question.` },
+      ],
+    },
+  ];
+}
+
+/**
+ * Execute Phase 4 end-to-end intelligence analysis (DSA & Technical Topic Centric).
  */
 export const analyzeResults = async (conversationId) => {
   if (!conversationId) {
@@ -392,7 +448,8 @@ export const analyzeResults = async (conversationId) => {
     }
   }
 
-  const defaultTopics = buildDefaultDsaTopics(profile, searchResults);
+  const defaultDsa = buildDefaultDsaTopics(profile, searchResults);
+  const defaultTech = buildDefaultTechnicalTopics(profile, searchResults);
 
   const ai = getGeminiClient();
   const defaultAnalysis = {
@@ -401,16 +458,20 @@ export const analyzeResults = async (conversationId) => {
       role: profile.role || null,
       experience: profile.experience || null,
       totalResults: searchResults.length,
-      totalTopics: defaultTopics.length,
+      totalDsaTopics: defaultDsa.length,
+      totalTechnicalTopics: defaultTech.length,
       confidence: 0.95,
     },
-    topics: defaultTopics,
+    dsaTopics: defaultDsa,
+    technicalTopics: defaultTech,
+    topics: [...defaultDsa, ...defaultTech],
     learningRoadmap: [
       { step: 1, title: 'Master Core Data Structures', description: 'Focus on Arrays, HashMaps, Trees, and Graphs first.' },
-      { step: 2, title: 'Advanced Algorithmic Patterns', description: 'Practice Dynamic Programming, Sliding Window, and Backtracking.' },
+      { step: 2, title: 'Master Core Technical Subjects', description: 'Study OOP principles, DBMS Normalization/ACID, OS Concurrency, and TCP/IP Networking.' },
+      { step: 3, title: 'Advanced Algorithmic Patterns', description: 'Practice Dynamic Programming, Sliding Window, and Backtracking.' },
     ],
     companyInsights: [
-      { title: `${profile.company || 'Target Company'} DSA Expectations`, description: 'High emphasis on clean code modularity, state space analysis, and optimal time complexities.' },
+      { title: `${profile.company || 'Target Company'} Expectations`, description: 'High emphasis on OOP modularity, SQL query performance, OS thread synchronization, and optimal DSA time complexities.' },
     ],
   };
 
@@ -439,7 +500,7 @@ export const analyzeResults = async (conversationId) => {
   for (const modelName of models) {
     try {
       parsed = await attemptCall(modelName);
-      if (parsed?.topics || parsed?.summary) break;
+      if (parsed?.dsaTopics || parsed?.technicalTopics || parsed?.summary) break;
     } catch (err) {
       console.warn(`[analyzeResults ${modelName} Note]:`, err.message);
     }
@@ -448,6 +509,9 @@ export const analyzeResults = async (conversationId) => {
   const analysisPayload = {
     userId: userId || null,
     conversationId,
+    dsaTopics: parsed?.dsaTopics || defaultDsa,
+    technicalTopics: parsed?.technicalTopics || defaultTech,
+    topics: [...(parsed?.dsaTopics || defaultDsa), ...(parsed?.technicalTopics || defaultTech)],
     ...(parsed || defaultAnalysis),
   };
 
