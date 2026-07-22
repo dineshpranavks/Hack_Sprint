@@ -1,11 +1,36 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CHAT_HISTORY } from '../data/problems';
+import { useAuth } from '../hooks/useAuth';
 
 export default function ProfilePanel({ isOpen, onClose }) {
   const navigate   = useNavigate();
   const location   = useLocation();
   const panelRef   = useRef(null);
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    onClose();
+    try {
+      await logout();
+      navigate('/');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  const getInitials = (nameOrEmail) => {
+    if (!nameOrEmail) return 'U';
+    const parts = nameOrEmail.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return nameOrEmail[0].toUpperCase();
+  };
+
+  const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
+  const displayEmail = user?.email || 'user@hacksprint.ai';
+  const initial = getInitials(displayName);
 
   /* close on outside click */
   useEffect(() => {
@@ -52,12 +77,16 @@ export default function ProfilePanel({ isOpen, onClose }) {
         {/* ── USER HEADER ── */}
         <div className="pp-header">
           <div className="pp-avatar-wrap">
-            <div className="pp-avatar">A</div>
+            {user?.photoURL ? (
+              <img src={user.photoURL} alt={displayName} className="pp-avatar" style={{ objectFit: 'cover' }} />
+            ) : (
+              <div className="pp-avatar">{initial}</div>
+            )}
             <span className="pp-online-dot" />
           </div>
           <div className="pp-user-info">
-            <div className="pp-user-name">Arjun</div>
-            <div className="pp-user-email">arjun@hacksprint.ai</div>
+            <div className="pp-user-name">{displayName}</div>
+            <div className="pp-user-email">{displayEmail}</div>
           </div>
         </div>
 
@@ -104,7 +133,7 @@ export default function ProfilePanel({ isOpen, onClose }) {
           <button className="pp-action-btn pp-action-settings" onClick={() => go('/profile')}>
             <span>⚙️</span> Settings
           </button>
-          <button className="pp-action-btn pp-action-logout" onClick={() => { onClose(); navigate('/'); }}>
+          <button className="pp-action-btn pp-action-logout" onClick={handleLogout}>
             <span>⎋</span> Logout
           </button>
         </div>
@@ -113,3 +142,4 @@ export default function ProfilePanel({ isOpen, onClose }) {
     </>
   );
 }
+

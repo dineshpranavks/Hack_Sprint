@@ -1,8 +1,18 @@
-import admin from "firebase-admin";
-import serviceAccount from "./serviceAccountKey.json" assert { type: "json" };
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { createRequire } from "module";
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+const require = createRequire(import.meta.url);
+const serviceAccount = require("./serviceAccountKey.json");
 
-export default admin;
+if (!getApps().length) {
+  try {
+    initializeApp({
+      credential: cert(serviceAccount),
+    });
+    console.log("[Firebase Admin Config]: Successfully initialized with serviceAccountKey.json");
+  } catch (err) {
+    console.error("[Firebase Admin Config Error]:", err.message);
+  }
+}
+
+export default getApps()[0];

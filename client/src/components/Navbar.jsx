@@ -1,10 +1,24 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ProfilePanel from './ProfilePanel';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Navbar() {
   const navigate   = useNavigate();
   const [open, setOpen] = useState(false);
+  const { user } = useAuth();
+
+  const getInitials = (nameOrEmail) => {
+    if (!nameOrEmail) return 'U';
+    const parts = nameOrEmail.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return nameOrEmail[0].toUpperCase();
+  };
+
+  const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
+  const initial = getInitials(displayName);
 
   return (
     <>
@@ -23,19 +37,41 @@ export default function Navbar() {
           <span className="status-dot" />
         </div>
 
-        {/* PROFILE BUTTON */}
-        <button
-          id="profile-btn"
-          className={`profile-icon-btn ${open ? 'profile-icon-btn--active' : ''}`}
-          onClick={() => setOpen(o => !o)}
-          aria-label="Open profile"
-          title="Profile & History"
-        >
-          <div className="profile-avatar-small">A</div>
-        </button>
+        {/* AUTH ACTIONS / PROFILE BUTTON */}
+        {user ? (
+          <button
+            id="profile-btn"
+            className={`profile-icon-btn ${open ? 'profile-icon-btn--active' : ''}`}
+            onClick={() => setOpen(o => !o)}
+            aria-label="Open profile"
+            title={`${displayName} - Profile & History`}
+          >
+            {user.photoURL ? (
+              <img src={user.photoURL} alt={displayName} className="profile-avatar-small" style={{ objectFit: 'cover' }} />
+            ) : (
+              <div className="profile-avatar-small">{initial}</div>
+            )}
+          </button>
+        ) : (
+          <div className="navbar-auth-actions">
+            <button
+              className="nav-btn-login"
+              onClick={() => navigate('/login')}
+            >
+              Login
+            </button>
+            <button
+              className="nav-btn-signup"
+              onClick={() => navigate('/signup')}
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
       </nav>
 
-      <ProfilePanel isOpen={open} onClose={() => setOpen(false)} />
+      {user && <ProfilePanel isOpen={open} onClose={() => setOpen(false)} />}
     </>
   );
 }
+

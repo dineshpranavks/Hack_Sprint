@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import agentRoutes from './agent.routes.js';
+import searchRoutes from './search.routes.js';
 
 const router = Router();
 
@@ -11,6 +13,8 @@ router.get('/health', (req, res) => {
   });
 });
 
-// TODO: Mount sub-routers (e.g. router.use('/auth', authRouter), router.use('/questions', questionRouter), router.use('/ai', aiRouter))
+// Mount Sub-routers
+router.use('/agent', agentRoutes);
+router.use('/search', searchRoutes);
 
 export default router;

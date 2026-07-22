@@ -1,16 +1,15 @@
-import initFirebase from './firebase.js';
+import { getFirestore, FieldValue as FirestoreFieldValue } from "firebase-admin/firestore";
+import "./firebase.js";
 
-// TODO: Initialize Firestore Database instance from Firebase Admin SDK
 let db = null;
 
 export const getDb = () => {
   if (!db) {
-    const admin = initFirebase();
-    if (admin.apps.length) {
-      db = admin.firestore();
-    }
+    db = getFirestore();
   }
   return db;
 };
+
+export const FieldValue = FirestoreFieldValue;
 
 export default getDb;
