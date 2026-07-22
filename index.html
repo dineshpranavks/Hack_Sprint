@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HackSprint — AI Coding Interview Assistant</title>
+  <meta name="description" content="AI-powered coding interview preparation. Search problems by company, difficulty, and platform. Get detailed solutions and practice links." />
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* ===== HOME PAGE SPECIFIC ===== */
+    body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    .page-layout {
+      display: flex;
+      flex: 1;
+      padding-top: var(--navbar-height);
+      overflow: hidden;
+    }
+
+    /* MAIN CONTENT */
+    .main-content {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      padding: 40px 24px 120px;
+    }
+
+    .main-content .grid-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* HERO */
+    .hero {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      max-width: 640px;
+      width: 100%;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(0, 212, 170, 0.3);
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+      letter-spacing: 0.04em;
+    }
+
+    .hero-badge .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse-glow 2s infinite;
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.04em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 1rem;
+      color: var(--text-secondary);
+      max-width: 480px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    /* SUGGESTION CHIPS */
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .suggestion-chip {
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .suggestion-chip:hover {
+      border-color: var(--accent);
+      color: var(--text-primary);
+      background: var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .suggestion-chip .icon { font-size: 14px; }
+
+    /* BOTTOM SEARCH BAR */
+    .bottom-search-area {
+      position: fixed;
+      bottom: 0;
+      left: var(--sidebar-width);
+      right: 0;
+      padding: 16px 24px 24px;
+      background: linear-gradient(to top, var(--bg-primary) 60%, transparent);
+      z-index: 10;
+    }
+
+    .search-wrapper {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .search-bar-home {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
+      border-radius: 16px;
+      padding: 12px 12px 12px 20px;
+      transition: var(--transition);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .search-bar-home:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .search-bar-home input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      min-height: 28px;
+    }
+
+    .search-bar-home input::placeholder { color: var(--text-muted); }
+
+    .search-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .search-action-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-hover);
+      color: var(--text-muted);
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .search-action-icon:hover {
+      border-color: var(--border-bright);
+      color: var(--text-secondary);
+    }
+
+    .send-btn-home {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--accent);
+      border: none;
+      color: var(--bg-primary);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+
+    .send-btn-home:hover {
+      background: var(--accent-dark);
+      transform: scale(1.05);
+    }
+
+    .send-btn-home:disabled {
+      background: var(--text-muted);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .search-footer {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    /* STATS ROW */
+    .stats-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      margin-bottom: 48px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.04em;
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 32px;
+      background: var(--border-bright);
+    }
+
+    /* GLOW ORBS */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(60px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .orb-1 {
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(0, 212, 170, 0.08), transparent 70%);
+      top: 20%;
+      left: 30%;
+    }
+
+    .orb-2 {
+      width: 250px;
+      height: 250px;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.06), transparent 70%);
+      bottom: 30%;
+      right: 20%;
+    }
+
+    /* LOADING ANIMATION */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 14, 23, 0.8);
+      backdrop-filter: blur(4px);
+      z-index: 999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .loading-overlay.show { display: flex; }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--border-bright);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    .loading-subtext {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    /* SIDEBAR TOGGLE */
+    .sidebar-toggle {
+      display: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 16px;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main-content { margin-left: 0; }
+      .bottom-search-area { left: 0; }
+      .sidebar-toggle { display: flex; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+    <a href="index.html" class="navbar-logo">
+      <div class="logo-icon">⚡</div>
+      Hack<span>Sprint</span>
+    </a>
+    <div style="flex:1"></div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span style="font-size:0.8rem; color:var(--text-muted);">AI-Powered Problem Search</span>
+      <div style="width:8px; height:8px; border-radius:50%; background:var(--accent); animation:pulse-glow 2s infinite;"></div>
+    </div>
+  </nav>
+
+  <div class="page-layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h3>Chats</h3>
+        <button class="new-chat-btn" title="New chat" onclick="clearSearch()">+</button>
+      </div>
+      <div class="sidebar-list" id="chatList">
+        <!-- Populated by JS -->
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content grid-bg">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+
+      <div class="hero fade-in-up">
+        <div class="hero-badge">
+          <div class="pulse"></div>
+          AI AGENT ACTIVE
+        </div>
+
+        <h1>Your Coding Interview<br/>AI Co-Pilot</h1>
+
+        <p>Ask me anything — search for problems by company, topic, or difficulty. Get real solutions, approaches, and practice links instantly.</p>
+
+        <div class="stats-row fade-in-up-delay-1">
+          <div class="stat-item">
+            <div class="stat-value">500+</div>
+            <div class="stat-label">Real Problems</div>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <div class="stat-value">50+</div>
+            <div class="stat-label">Top Companies</div>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <div class="stat-value">3</div>
+            <div class="stat-label">Platforms</div>
+          </div>
+        </div>
+
+        <div class="suggestions fade-in-up-delay-2" id="suggestions">
+          <button class="suggestion-chip" onclick="fillSearch('Dynamic programming problems')">
+            <span class="icon">🧠</span> Dynamic Programming
+          </button>
+          <button class="suggestion-chip" onclick="fillSearch('Google interview questions')">
+            <span class="icon">🏢</span> Google Questions
+          </button>
+          <button class="suggestion-chip" onclick="fillSearch('Hard LeetCode problems')">
+            <span class="icon">🔥</span> Hard Problems
+          </button>
+          <button class="suggestion-chip" onclick="fillSearch('Array and two pointer')">
+            <span class="icon">📊</span> Arrays & Two Pointer
+          </button>
+          <button class="suggestion-chip" onclick="fillSearch('Amazon SDE interview')">
+            <span class="icon">💼</span> Amazon SDE Prep
+          </button>
+          <button class="suggestion-chip" onclick="fillSearch('Tree traversal problems')">
+            <span class="icon">🌲</span> Tree Problems
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- BOTTOM SEARCH BAR -->
+  <div class="bottom-search-area">
+    <div class="search-wrapper">
+      <div class="search-bar-home">
+        <input
+          type="text"
+          id="homeSearch"
+          placeholder="Search problems by company, topic, difficulty... (e.g. 'Google hard problems')"
+          autocomplete="off"
+        />
+        <div class="search-actions">
+          <button class="send-btn-home" id="sendBtn" onclick="handleSearch()" title="Search">
+            ↑
+          </button>
+        </div>
+      </div>
+      <div class="search-footer">
+        HackSprint AI searches real problems from LeetCode, HackerRank & GeeksforGeeks
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADING OVERLAY -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Searching problems...</div>
+    <div class="loading-subtext">
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+      Analyzing your query with AI
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script>
+    const homeSearch = document.getElementById('homeSearch');
+    const sendBtn = document.getElementById('sendBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+
+    // Populate sidebar
+    function renderSidebar() {
+      const list = document.getElementById('chatList');
+      const grouped = {
+        'Today': CHAT_HISTORY.filter(c => c.time.includes('h ago')),
+        'Yesterday': CHAT_HISTORY.filter(c => c.time === 'Yesterday'),
+        'Earlier': CHAT_HISTORY.filter(c => c.time.includes('days ago'))
+      };
+
+      let html = '';
+      for (const [label, chats] of Object.entries(grouped)) {
+        if (chats.length === 0) continue;
+        html += `<div class="sidebar-section-label">${label}</div>`;
+        chats.forEach(chat => {
+          html += `
+            <div class="sidebar-item" onclick="fillSearch('${chat.query}')">
+              <div class="sidebar-item-icon">💬</div>
+              <div class="sidebar-item-text">
+                <div class="sidebar-item-title">${chat.title}</div>
+                <div class="sidebar-item-time">${chat.time}</div>
+              </div>
+            </div>
+          `;
+        });
+      }
+      list.innerHTML = html;
+    }
+
+    function fillSearch(text) {
+      homeSearch.value = text;
+      homeSearch.focus();
+    }
+
+    function clearSearch() {
+      homeSearch.value = '';
+      homeSearch.focus();
+    }
+
+    function handleSearch() {
+      const query = homeSearch.value.trim();
+      if (!query) return;
+      loadingOverlay.classList.add('show');
+      setTimeout(() => {
+        const encoded = encodeURIComponent(query);
+        window.location.href = `results.html?q=${encoded}`;
+      }, 1200);
+    }
+
+    homeSearch.addEventListener('keydown', e => {
+      if (e.key === 'Enter') handleSearch();
+    });
+
+    // Sidebar toggle
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.toggle('open');
+    });
+
+    // Init
+    renderSidebar();
+  </script>
+</body>
+</html>
