@@ -10,12 +10,29 @@ const QUERIES_COLLECTION = 'generatedQueries';
 const SEARCH_RESULTS_COLLECTION = 'searchResults';
 
 /**
- * Classify a search item into exact categories:
- * - 'Coding Problem'
- * - 'Technical Question'
- * - 'Interview Experience'
- * - 'Discussion'
+ * Filter out non-coding articles, blogs, cheat sheets, HR, salary, resume advice.
  */
+export const filterSolvableCodingProblems = (results = []) => {
+  const rejectedKeywords = ['salary', 'resume', 'hr round', 'behavioral', 'cheat sheet', 'handbook', 'career advice', 'negotiation'];
+
+  const codingList = [];
+  const additionalResources = [];
+
+  results.forEach((item) => {
+    if (!item) return;
+    const text = `${item.title || ''} ${item.description || ''}`.toLowerCase();
+    const isRejected = rejectedKeywords.some(kw => text.includes(kw));
+
+    if (isRejected) {
+      additionalResources.push({ ...item, isAdditionalResource: true });
+    } else {
+      codingList.push(item);
+    }
+  });
+
+  return { codingList, additionalResources };
+};
+
 export const classifyResultItem = (item = {}) => {
   if (item.source === 'technical' || item.subject) {
     return 'Technical Question';
@@ -41,9 +58,6 @@ export const classifyResultItem = (item = {}) => {
   return 'Technical Question';
 };
 
-/**
- * Remove duplicates based on URL or Title.
- */
 export const removeDuplicateUrls = (results = []) => {
   const seenUrls = new Set();
   const seenTitles = new Set();
@@ -63,9 +77,6 @@ export const removeDuplicateUrls = (results = []) => {
   });
 };
 
-/**
- * Calculate relevance score.
- */
 export const calculateRelevanceScore = (item, profile = {}) => {
   let score = 50;
   const company = (profile.company || '').toLowerCase();
@@ -78,9 +89,6 @@ export const calculateRelevanceScore = (item, profile = {}) => {
   return score;
 };
 
-/**
- * Sort results.
- */
 export const sortByRelevance = (results = [], profile = {}) => {
   return results.map((item) => ({
     ...item,
@@ -89,9 +97,6 @@ export const sortByRelevance = (results = [], profile = {}) => {
   })).sort((a, b) => b.relevanceScore - a.relevanceScore);
 };
 
-/**
- * Merge results from all sources.
- */
 export const mergeResults = (githubRes = [], stackRes = [], redditRes = [], codeforcesRes = [], technicalRes = []) => {
   return [
     ...codeforcesRes,
@@ -102,9 +107,6 @@ export const mergeResults = (githubRes = [], stackRes = [], redditRes = [], code
   ];
 };
 
-/**
- * Save search results to Cloud Firestore.
- */
 export const saveResults = async (conversationId, userId, primaryQuery, results = []) => {
   const db = getDb();
   if (!db || !conversationId) return;
@@ -125,9 +127,6 @@ export const saveResults = async (conversationId, userId, primaryQuery, results 
   }
 };
 
-/**
- * Main Service Handler for Search Orchestrator.
- */
 export const runSearchOrchestrator = async (conversationId, userId = 'guest') => {
   const db = getDb();
 
@@ -167,7 +166,8 @@ export const runSearchOrchestrator = async (conversationId, userId = 'guest') =>
 
   const rawMerged = mergeResults(githubItems, stackItems, redditItems, codeforcesItems, technicalItems);
   const deduplicated = removeDuplicateUrls(rawMerged);
-  const finalResults = sortByRelevance(deduplicated, profile);
+  const { codingList, additionalResources } = filterSolvableCodingProblems(deduplicated);
+  const finalResults = sortByRelevance(codingList, profile);
 
   await saveResults(conversationId, userId, queries[0]?.query, finalResults);
 
@@ -175,6 +175,7 @@ export const runSearchOrchestrator = async (conversationId, userId = 'guest') =>
     conversationId,
     totalCount: finalResults.length,
     results: finalResults,
+    additionalResources,
   };
 };
 

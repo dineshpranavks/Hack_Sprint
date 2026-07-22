@@ -6,12 +6,12 @@ import { useAuth } from '../hooks/useAuth';
 import { useConversation } from '../hooks/useConversation';
 
 const SUGGESTIONS = [
-  { icon: '🧠', label: 'Dynamic Programming', query: 'dynamic programming' },
-  { icon: '🏢', label: 'Google Questions',    query: 'google' },
-  { icon: '🔥', label: 'Hard Problems',       query: 'hard' },
-  { icon: '📊', label: 'Arrays & Two Pointer',query: 'array' },
-  { icon: '💼', label: 'Amazon SDE Prep',     query: 'amazon' },
-  { icon: '🌲', label: 'Tree Problems',       query: 'tree' },
+  { icon: '🧠', label: 'Dynamic Programming', query: 'Dynamic Programming' },
+  { icon: '🏢', label: 'Amazon SDE2',         query: 'Amazon SDE2' },
+  { icon: '💻', label: 'Java Graph Problems', query: 'Java Graph Problems' },
+  { icon: '📊', label: 'Sliding Window',      query: 'Sliding Window' },
+  { icon: '💼', label: 'Google SDE1',         query: 'Google SDE1' },
+  { icon: '🌲', label: 'Tree Problems',       query: 'Tree Problems' },
 ];
 
 export default function HomePage() {
@@ -88,14 +88,14 @@ export default function HomePage() {
         <div className="hero fade-up" style={{ maxWidth: 1100, margin: '0 auto', padding: '0 20px' }}>
           <div className="hero-badge">
             <span className="hero-badge-dot" />
-            AI Agent Active
+            AI Intent Extraction Engine Active
           </div>
 
-          <h1>Your Coding Interview<br />AI Co&#8209;Pilot</h1>
+          <h1>Your Interview Preparation<br />AI Co&#8209;Pilot</h1>
 
           <p className="hero-sub">
-            Chat naturally — tell me your target company, role, or experience level.
-            I will understand your intent and collect everything required.
+            Tell me your target company, role, language, or DSA topic.
+            I will extract your intent and build your interview kit instantly.
           </p>
 
           {/* STATS OR CONVERSATION HISTORY */}
@@ -105,7 +105,7 @@ export default function HomePage() {
               <div className="stat-div" />
               <div className="stat"><div className="stat-val">50+</div><div className="stat-lbl">Top Companies</div></div>
               <div className="stat-div" />
-              <div className="stat"><div className="stat-val">3</div><div className="stat-lbl">Platforms</div></div>
+              <div className="stat"><div className="stat-val">4</div><div className="stat-lbl">Tech Subjects</div></div>
             </div>
           ) : (
             <div className="ai-assistant-wrapper fade-in">
@@ -130,35 +130,33 @@ export default function HomePage() {
                     <div className="bubble-sender">AI Assistant</div>
                     <div className="bubble-content" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span className="btn-spinner" style={{ width: 14, height: 14 }} />
-                      <span>Thinking & executing master workflow...</span>
+                      <span>Extracting intent & generating interview preparation kit...</span>
                     </div>
                   </div>
                 )}
                 <div ref={chatEndRef} />
               </div>
 
-              {/* EXTRACTED FIELDS BAR */}
+              {/* EXTRACTED CRITERIA BAR */}
               <div className="extracted-criteria-bar">
-                <span className="criteria-title">Collected Criteria:</span>
-                <span className={`criteria-tag ${!fields.company ? 'criteria-tag--missing' : ''}`}>
-                  🏢 Company: {fields.company || 'Missing'}
-                </span>
-                <span className={`criteria-tag ${!fields.role ? 'criteria-tag--missing' : ''}`}>
-                  💼 Role: {fields.role || 'Missing'}
-                </span>
-                <span className={`criteria-tag ${!fields.experience ? 'criteria-tag--missing' : ''}`}>
-                  📅 Experience: {fields.experience || 'Missing'}
-                </span>
-
-                {fields.skills && fields.skills.length > 0 && (
-                  <span className="criteria-tag">
-                    ⚡ Skills: {fields.skills.join(', ')}
-                  </span>
+                <span className="criteria-title">Extracted Criteria:</span>
+                {fields.company && (
+                  <span className="criteria-tag">🏢 Company: {fields.company}</span>
                 )}
-                {fields.interviewTypes && fields.interviewTypes.length > 0 && (
-                  <span className="criteria-tag">
-                    🎯 Rounds: {fields.interviewTypes.join(', ')}
-                  </span>
+                {fields.role && (
+                  <span className="criteria-tag">💼 Role: {fields.role}</span>
+                )}
+                {fields.experience && (
+                  <span className="criteria-tag">📅 Experience: {fields.experience}</span>
+                )}
+                {fields.topics && fields.topics.length > 0 && (
+                  <span className="criteria-tag">🧩 Topics: {fields.topics.join(', ')}</span>
+                )}
+                {fields.language && (
+                  <span className="criteria-tag">💻 Language: {fields.language}</span>
+                )}
+                {fields.skills && fields.skills.length > 0 && (
+                  <span className="criteria-tag">⚡ Skills: {fields.skills.join(', ')}</span>
                 )}
               </div>
 
@@ -166,7 +164,7 @@ export default function HomePage() {
               {completed && (
                 <div className="fade-in">
                   <div className="completed-badge-card" style={{ marginBottom: 20 }}>
-                    <span>✅ All required information collected! Session status updated to <strong>completed</strong>.</span>
+                    <span>✅ Interview preparation kit generated successfully!</span>
                     <button className="reset-conv-btn" onClick={resetConversation}>
                       New Session
                     </button>
@@ -207,7 +205,7 @@ export default function HomePage() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              placeholder="Tell me your interview target... e.g. 'Amazon backend engineer with 2 yrs experience'"
+              placeholder="Enter any interview prompt... e.g. 'Amazon', 'Sliding Window', 'Google SDE2', 'Java Graph Problems'"
               disabled={loading}
             />
             <button
@@ -221,7 +219,7 @@ export default function HomePage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
             <p className="search-hint" style={{ margin: 0 }}>
-              AI Master Orchestrator · Single request executes Conversation ➔ Queries ➔ Multi-Source Search ➔ AI Analysis
+              AI Intent Engine · Instant personalized DSA & Technical interview recommendations
             </p>
             {hasHistory && (
               <button
@@ -229,7 +227,7 @@ export default function HomePage() {
                 onClick={resetConversation}
                 style={{ fontSize: '0.74rem', padding: '2px 8px' }}
               >
-                Clear History
+                Clear Session
               </button>
             )}
           </div>

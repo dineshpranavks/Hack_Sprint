@@ -1,19 +1,14 @@
 import { getGeminiClient } from '../config/gemini.js';
 import { getDb, FieldValue } from '../config/db.js';
 import { buildIntentPrompt } from '../prompts/intent.prompt.js';
-import { buildFollowUpPrompt } from '../prompts/followup.prompt.js';
 import { buildQueryGenerationPrompt } from '../prompts/queryGeneration.prompt.js';
 import { buildAnalysisPrompt } from '../prompts/analysis.prompt.js';
 
-const REQUIRED_FIELDS = ['company', 'role', 'experience'];
 const COLLECTION_NAME = 'conversationSessions';
 const QUERIES_COLLECTION_NAME = 'generatedQueries';
 const SEARCH_RESULTS_COLLECTION_NAME = 'searchResults';
 const ANALYSIS_COLLECTION_NAME = 'analysisResults';
 
-/**
- * Clean JSON text by stripping markdown code blocks if present.
- */
 function cleanJsonString(str) {
   if (!str) return '';
   let cleaned = str.trim();
@@ -23,72 +18,88 @@ function cleanJsonString(str) {
   return cleaned.trim();
 }
 
-/**
- * Validate conversation fields against required criteria.
- */
 export const validateConversation = (fields = {}) => {
-  const missingFields = REQUIRED_FIELDS.filter((f) => {
-    const val = fields[f];
-    return !val || (typeof val === 'string' && val.trim().length === 0);
-  });
-
-  const completed = missingFields.length === 0;
-  return { completed, missingFields };
+  return { completed: true, missingFields: [] };
 };
 
-/**
- * Smart heuristic extraction fallback if Gemini API is unavailable or throws errors.
- */
 function heuristicExtract(latestMsg = '', existingFields = {}) {
   const text = (typeof latestMsg === 'string' ? latestMsg : JSON.stringify(latestMsg)).toLowerCase();
-  const companies = ['amazon', 'google', 'microsoft', 'meta', 'apple', 'netflix', 'uber', 'linkedin', 'adobe', 'twitter', 'oracle'];
   
+  const companies = [
+    'zoho', 'amazon', 'google', 'microsoft', 'meta', 'apple', 'netflix', 'uber',
+    'linkedin', 'adobe', 'twitter', 'oracle', 'salesforce', 'flipkart', 'atlassian',
+    'paypal', 'tcs', 'infosys', 'wipro', 'swiggy', 'zomato', 'goldman', 'walmart',
+    'stripe', 'cisco', 'intel', 'nvidia'
+  ];
   let comp = existingFields.company || null;
   for (const c of companies) {
     if (text.includes(c)) {
       comp = c.charAt(0).toUpperCase() + c.slice(1);
+      if (c === 'tcs') comp = 'TCS';
       break;
     }
   }
 
   let role = existingFields.role || null;
-  if (text.includes('backend')) role = 'Backend Developer';
-  else if (text.includes('frontend')) role = 'Frontend Engineer';
-  else if (text.includes('fullstack') || text.includes('full stack')) role = 'Fullstack Engineer';
-  else if (text.includes('sde') || text.includes('software') || text.includes('developer') || text.includes('engineer')) role = 'Software Development Engineer';
+  if (text.includes('frontend') || text.includes('react') || text.includes('ui')) {
+    role = 'Frontend Engineer';
+  } else if (text.includes('backend') || text.includes('node') || text.includes('spring')) {
+    role = 'Backend Engineer';
+  } else if (text.includes('cloud') || text.includes('devops') || text.includes('aws')) {
+    role = 'Cloud/DevOps Engineer';
+  } else if (text.includes('data engineer') || text.includes('spark') || text.includes('etl')) {
+    role = 'Data Engineer';
+  } else if (text.includes('machine learning') || text.includes('ml engineer') || text.includes('pytorch')) {
+    role = 'Machine Learning Engineer';
+  } else if (text.includes('sde2') || text.includes('sde 2') || text.includes('sde-2') || text.includes('sd2')) {
+    role = 'Software Development Engineer II';
+  } else if (text.includes('sde1') || text.includes('sde 1') || text.includes('sde-1') || text.includes('sd1') || text.includes('sd 1') || text.includes('sd-1')) {
+    role = 'Software Development Engineer I';
+  } else if (text.includes('sde3') || text.includes('sde 3') || text.includes('sde-3') || text.includes('sd3')) {
+    role = 'Senior Software Engineer';
+  }
 
   let exp = existingFields.experience || null;
-  if (text.includes('senior') || text.includes('lead') || text.includes('5') || text.includes('6') || text.includes('7')) {
+  if (text.includes('5 years') || text.includes('5 yrs') || text.includes('6 years') || text.includes('senior')) {
     exp = 'Senior (5+ yrs)';
-  } else if (text.includes('mid') || text.includes('2') || text.includes('3') || text.includes('4')) {
+  } else if (text.includes('2 years') || text.includes('2 yrs') || text.includes('3 years') || text.includes('3 yrs')) {
     exp = 'Mid-Level (2-4 yrs)';
-  } else if (
-    text.includes('student') || text.includes('fresher') || text.includes('junior') || text.includes('graduate') ||
-    text.includes('entry') || text.includes('intern') || text.includes('0') || text.includes('1') ||
-    text.includes('experience yet') || text.includes('final-year') || text.includes('college')
-  ) {
+  } else if (text.includes('fresher') || text.includes('0 years') || text.includes('intern') || text.includes('graduate')) {
     exp = 'Junior / Fresher (0-1 yrs)';
   }
 
-  // Fallback defaults for interview intent if company or role was detected
-  if (!comp && (text.includes('interview') || text.includes('coding') || text.includes('prep'))) comp = 'Target Tech Company';
-  if (!role && (text.includes('interview') || text.includes('coding') || text.includes('prep'))) role = 'Software Engineer';
-  if (!exp && (comp || role)) exp = 'Junior / Fresher (0-1 yrs)';
+  const topics = [...(existingFields.topics || [])];
+  const knownTopics = [
+    'Dynamic Programming', 'Graphs', 'Trees', 'Sliding Window', 'Two Pointers',
+    'Binary Search', 'Heap', 'Backtracking', 'Object Oriented Programming',
+    'Database Management Systems', 'Operating Systems', 'Computer Networks'
+  ];
+  for (const t of knownTopics) {
+    if (text.includes(t.toLowerCase()) && !topics.includes(t)) {
+      topics.push(t);
+    }
+  }
+
+  let lang = existingFields.language || null;
+  if (text.includes('java') && !text.includes('javascript')) lang = 'Java';
+  else if (text.includes('python')) lang = 'Python';
+  else if (text.includes('c++') || text.includes('cpp')) lang = 'C++';
+  else if (text.includes('javascript') || text.includes('js')) lang = 'JavaScript';
 
   return {
     company: comp,
-    role: role || existingFields.role || null,
-    experience: exp || existingFields.experience || null,
-    skills: existingFields.skills || ['DSA', 'Problem Solving'],
+    role,
+    experience: exp,
+    skills: existingFields.skills || [],
     technologies: existingFields.technologies || [],
-    interviewTypes: existingFields.interviewTypes || ['Coding'],
-    seniority: existingFields.seniority || exp || null,
+    topics,
+    difficulty: existingFields.difficulty || null,
+    language: lang,
+    interviewType: existingFields.interviewType || null,
+    confidence: 0.95,
   };
 }
 
-/**
- * Extract candidate fields using Gemini with fallback.
- */
 export const extractIntent = async (messages = [], existingFields = {}) => {
   const lastUserObj = [...messages].reverse().find((m) => m.sender === 'user' || m.role === 'user');
   const latestUserMsg = lastUserObj?.text || lastUserObj?.content || (typeof lastUserObj === 'string' ? lastUserObj : '');
@@ -96,7 +107,6 @@ export const extractIntent = async (messages = [], existingFields = {}) => {
   const fallback = heuristicExtract(latestUserMsg, existingFields);
   const ai = getGeminiClient();
   if (!ai) {
-    console.warn('[extractIntent Note]: Gemini API key unavailable. Using smart heuristic extraction.');
     return fallback;
   }
 
@@ -127,55 +137,30 @@ export const extractIntent = async (messages = [], existingFields = {}) => {
     }
   }
 
-  const result = {
-    company: parsed?.company || existingFields.company || fallback.company,
-    role: parsed?.role || existingFields.role || fallback.role,
-    experience: parsed?.experience || existingFields.experience || fallback.experience,
-    skills: Array.isArray(parsed?.skills) ? parsed.skills : existingFields.skills || ['DSA'],
-    technologies: Array.isArray(parsed?.technologies) ? parsed.technologies : existingFields.technologies || [],
-    interviewTypes: Array.isArray(parsed?.interviewTypes) ? parsed.interviewTypes : existingFields.interviewTypes || ['Coding'],
-    seniority: parsed?.seniority || parsed?.experience || existingFields.seniority || fallback.experience,
+  return {
+    company: parsed?.company !== undefined ? parsed.company : (existingFields.company || fallback.company),
+    role: parsed?.role !== undefined ? parsed.role : (existingFields.role || fallback.role),
+    experience: parsed?.experience !== undefined ? parsed.experience : (existingFields.experience || fallback.experience),
+    skills: Array.isArray(parsed?.skills) ? parsed.skills : (existingFields.skills || fallback.skills),
+    technologies: Array.isArray(parsed?.technologies) ? parsed.technologies : (existingFields.technologies || fallback.technologies),
+    topics: Array.isArray(parsed?.topics) ? parsed.topics : (existingFields.topics || fallback.topics),
+    difficulty: parsed?.difficulty || existingFields.difficulty || null,
+    language: parsed?.language || existingFields.language || fallback.language,
+    interviewType: parsed?.interviewType || existingFields.interviewType || null,
+    confidence: parsed?.confidence || 0.95,
   };
-
-  return result;
 };
 
-/**
- * Generate a follow-up question asking ONLY for missing fields.
- */
 export const generateFollowUpQuestion = async (fields = {}, missingFields = []) => {
-  if (!missingFields.length) {
-    return "Great! I have all the details needed. Generating your custom DSA & Technical interview recommendations now!";
+  const safeMissing = Array.isArray(missingFields) ? missingFields : [];
+  if (!safeMissing.length) {
+    return "Got it! Generating your custom interview preparation kit now!";
   }
-
-  const ai = getGeminiClient();
-  if (!ai) {
-    const fieldName = missingFields[0];
-    if (fieldName === 'company') return "Which company are you preparing for (e.g. Amazon, Google, Meta, Microsoft)?";
-    if (fieldName === 'role') return "What target role are you interviewing for (e.g. Backend Developer, SDE-2, Fullstack)?";
-    if (fieldName === 'experience') return "What is your experience level (e.g. Junior 0-2 yrs, Mid-Level 2-4 yrs, Senior 5+ yrs)?";
-    return `Could you please specify your ${missingFields.join(', ')}?`;
-  }
-
-  const promptText = buildFollowUpPrompt(fields, missingFields);
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: promptText,
-      config: { temperature: 0.4 },
-    });
-    return response.text?.trim() || `Could you please provide your ${missingFields.join(', ')}?`;
-  } catch (err) {
-    return `Could you please share your ${missingFields.join(', ')} so I can build your tailored interview prep kit?`;
-  }
+  return `Could you please share your ${safeMissing.join(', ')}?`;
 };
 
-/**
- * Update conversation state in Cloud Firestore.
- */
 export const updateConversation = async (conversationId, messages = [], fields = {}, userId = null) => {
   const activeId = conversationId || `conv-${Date.now()}`;
-  const { completed, missingFields } = validateConversation(fields);
   const db = getDb();
 
   const dataToSave = {
@@ -185,9 +170,9 @@ export const updateConversation = async (conversationId, messages = [], fields =
     chatHistory: messages,
     extractedFields: fields,
     fields,
-    missingFields,
-    completed,
-    status: completed ? 'completed' : 'in_progress',
+    missingFields: [],
+    completed: true,
+    status: 'completed',
     updatedAt: FieldValue.serverTimestamp(),
   };
 
@@ -208,33 +193,26 @@ export const updateConversation = async (conversationId, messages = [], fields =
     id: activeId,
     conversationId: activeId,
     fields,
-    completed,
-    missingFields,
-    status: dataToSave.status,
+    completed: true,
+    missingFields: [],
+    status: 'completed',
     messages,
     chatHistory: messages,
   };
 };
 
-/**
- * Generate 20 to 40 search queries covering both DSA and Technical subjects.
- */
 export const generateSearchQueries = async (conversationId, fields = {}, userId = null) => {
-  const { completed } = validateConversation(fields);
-  if (!completed) {
-    throw new Error('Conversation is incomplete.');
-  }
-
   const ai = getGeminiClient();
-  const company = fields.company || 'Tech';
+  const company = fields.company ? fields.company : 'General Software Engineering';
+  const role = fields.role || 'Software Engineer';
+
   const defaultQueries = [
-    { category: 'dsa', topic: 'Dynamic Programming', query: `${company} Dynamic Programming Problems`, priorityRating: 5 },
-    { category: 'dsa', topic: 'Graphs', query: `${company} Graph BFS DFS Problems`, priorityRating: 5 },
-    { category: 'dsa', topic: 'Sliding Window', query: `${company} Sliding Window Two Pointer Problems`, priorityRating: 5 },
-    { category: 'technical', topic: 'Object Oriented Programming', query: `${company} OOP Interview Questions`, priorityRating: 5 },
-    { category: 'technical', topic: 'Database Management Systems', query: `${company} DBMS SQL Interview Questions`, priorityRating: 5 },
-    { category: 'technical', topic: 'Operating Systems', query: `${company} Operating Systems Questions`, priorityRating: 4 },
-    { category: 'technical', topic: 'Computer Networks', query: `${company} Computer Networks Questions`, priorityRating: 4 },
+    { category: 'dsa', topic: 'Arrays & Two Pointers', query: `${company} ${role} Arrays Two Pointer Problems`, priorityRating: 5, rankCategory: 'Must Learn' },
+    { category: 'dsa', topic: 'Sliding Window', query: `${company} ${role} Sliding Window Problems`, priorityRating: 5, rankCategory: 'Must Learn' },
+    { category: 'dsa', topic: 'Dynamic Programming', query: `${company} ${role} Dynamic Programming Problems`, priorityRating: 4, rankCategory: 'Important' },
+    { category: 'technical', topic: 'Object Oriented Programming', query: `${company} OOP Interview Questions`, priorityRating: 5, rankCategory: 'Must Learn' },
+    { category: 'technical', topic: 'Database Management Systems', query: `${company} DBMS SQL Interview Questions`, priorityRating: 5, rankCategory: 'Must Learn' },
+    { category: 'technical', topic: 'Operating Systems', query: `${company} Operating Systems Questions`, priorityRating: 4, rankCategory: 'Important' },
   ];
 
   if (!ai) {
@@ -291,127 +269,76 @@ export const generateSearchQueries = async (conversationId, fields = {}, userId 
 };
 
 /**
- * Default fallback DSA Topics.
+ * Backend Categorizer: Groups ACTUAL searchResults into topics without ANY fake questions.
  */
-function buildDefaultDsaTopics(profile = {}, searchResults = []) {
-  const company = profile.company || 'Tech Company';
-  const role = profile.role || 'Software Engineer';
+function buildCategorizedDsaTopics(profile = {}, searchResults = []) {
+  const targetLabel = profile.company ? profile.company : 'General Software Engineering';
+  const dsaItems = searchResults.filter(q => q && q.source !== 'technical');
 
-  const dpQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('dp') || t.toLowerCase().includes('dynamic')));
-  const graphQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('graph') || t.toLowerCase().includes('dfs') || t.toLowerCase().includes('bfs')));
-  const treeQuestions = searchResults.filter(r => (r.topics || r.tags || []).some(t => t.toLowerCase().includes('tree')));
-  const otherQuestions = searchResults.filter(r => !dpQuestions.includes(r) && !graphQuestions.includes(r) && !treeQuestions.includes(r) && r.source !== 'technical');
+  if (!dsaItems.length) return [];
 
-  return [
-    {
-      name: 'Dynamic Programming',
-      priorityRating: 5,
-      explanation: `High frequency in ${company} ${role} technical rounds (knapsack, state transitions, memoization).`,
-      questionCount: dpQuestions.length || 5,
-      estimatedInterviewFrequency: 'Very High',
-      questions: dpQuestions.length ? dpQuestions : [
-        { id: 'water-overflow', title: 'Water Overflow / DP State Transition', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `High frequency DP pattern for ${company}` },
-        { id: 'cut-ribbon', title: 'Cut Ribbon (Unbounded Knapsack)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `Classic DP optimization question for ${company}` },
-      ],
-    },
-    {
-      name: 'Graphs & BFS/DFS',
-      priorityRating: 5,
-      explanation: `Crucial for ${role} roles evaluating shortest paths, grid traversals, and topological sorting.`,
-      questionCount: graphQuestions.length || 6,
-      estimatedInterviewFrequency: 'Very High',
-      questions: graphQuestions.length ? graphQuestions : [
-        { id: 'lunar-new-year-and-a-wander', title: 'Lunar New Year and a Wander (Graph Traversal)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `Graph BFS/DFS priority queue pattern for ${company}` },
-        { id: 'two-buttons', title: 'Two Buttons (Shortest Path BFS)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `State-space BFS graph search for ${company}` },
-      ],
-    },
-    {
-      name: 'Trees & Binary Search Trees',
-      priorityRating: 4,
-      explanation: `Evaluates recursive tree traversals, BST operations, and LCA algorithms.`,
-      questionCount: treeQuestions.length || 5,
-      estimatedInterviewFrequency: 'High',
-      questions: treeQuestions.length ? treeQuestions : [
-        { id: 'k-tree', title: 'k-Tree (Tree DP & Traversal)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset', reasonRecommended: `Tree traversal & DP recurrence pattern` },
-      ],
-    },
-    {
-      name: 'Arrays, HashMap & Two Pointers',
-      priorityRating: 4,
-      explanation: `Foundational DSA topic tested in initial phone screens.`,
-      questionCount: otherQuestions.length || 8,
-      estimatedInterviewFrequency: 'High',
-      questions: otherQuestions.length ? otherQuestions : [
-        { id: 't-primes', title: 'T-primes (Number Theory & Binary Search)', source: 'codeforces', difficulty: 'Medium', url: 'https://codeforces.com/problemset/problem/230/B', reasonRecommended: `High frequency problem asked in ${company} coding rounds` },
-      ],
-    },
-  ];
+  const groups = {};
+  dsaItems.forEach((q) => {
+    const topName = (q.topics && q.topics[0]) || (q.tags && q.tags[0]) || 'Arrays & Data Structures';
+    if (!groups[topName]) {
+      groups[topName] = [];
+    }
+    groups[topName].push({
+      id: q.id || q.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      title: q.title,
+      source: q.source || 'codeforces',
+      difficulty: q.difficulty || 'Medium',
+      url: q.url || '',
+      reasonRecommended: `Recommended DSA question for ${targetLabel}`,
+    });
+  });
+
+  return Object.entries(groups).map(([name, qList]) => ({
+    name,
+    priorityRating: 5,
+    rankCategory: 'Must Learn',
+    explanation: `Targeted ${name} coding problems collected for ${targetLabel}.`,
+    questionCount: qList.length,
+    estimatedInterviewFrequency: 'Very High',
+    questions: qList,
+  }));
 }
 
 /**
- * Default fallback Technical Interview Subjects (OOP, DBMS, OS, Computer Networks).
+ * Backend Categorizer: Groups ACTUAL technical searchResults into subject modules without ANY fake questions.
  */
-function buildDefaultTechnicalTopics(profile = {}, searchResults = []) {
-  const company = profile.company || 'Tech Company';
-  const role = profile.role || 'Software Engineer';
+function buildCategorizedTechnicalTopics(profile = {}, searchResults = []) {
+  const targetLabel = profile.company ? profile.company : 'General Software Engineering';
+  const techItems = searchResults.filter(q => q && (q.source === 'technical' || q.subject));
 
-  const techItems = searchResults.filter(r => r.source === 'technical' || r.subject);
-  const oopItems = techItems.filter(r => (r.subject || '').includes('Object Oriented') || (r.topics || []).includes('OOP'));
-  const dbmsItems = techItems.filter(r => (r.subject || '').includes('Database') || (r.topics || []).includes('DBMS'));
-  const osItems = techItems.filter(r => (r.subject || '').includes('Operating Systems') || (r.topics || []).includes('OS'));
-  const netItems = techItems.filter(r => (r.subject || '').includes('Networks') || (r.topics || []).includes('Networking'));
+  if (!techItems.length) return [];
 
-  return [
-    {
-      name: 'Object Oriented Programming',
-      priorityRating: 5,
-      explanation: `Core OOP design principles (Polymorphism, Inheritance, Encapsulation, SOLID) tested at ${company}.`,
-      questionCount: oopItems.length || 5,
-      estimatedInterviewFrequency: 'Very High',
-      questions: oopItems.length ? oopItems : [
-        { id: 'what-is-polymorphism', title: 'What is Polymorphism? Explain Compile-Time vs Runtime Polymorphism', source: 'technical', difficulty: 'Easy', reasonRecommended: `Core OOP concept tested in ${company} interviews.` },
-        { id: 'solid-principles-explained', title: 'Explain SOLID Principles with Real-World System Examples', source: 'technical', difficulty: 'Medium', reasonRecommended: `Crucial for mid/senior level design rounds at ${company}.` },
-      ],
-    },
-    {
-      name: 'Database Management Systems',
-      priorityRating: 5,
-      explanation: `Relational database fundamentals, SQL optimization, ACID compliance, and indexing.`,
-      questionCount: dbmsItems.length || 5,
-      estimatedInterviewFrequency: 'Very High',
-      questions: dbmsItems.length ? dbmsItems : [
-        { id: 'dbms-normalization-forms', title: 'Database Normalization: 1NF, 2NF, 3NF, and BCNF Explained', source: 'technical', difficulty: 'Medium', reasonRecommended: `Essential database theory for ${role} roles at ${company}.` },
-        { id: 'acid-properties-transactions', title: 'Explain ACID Properties in DBMS with Real-World Transaction Examples', source: 'technical', difficulty: 'Easy', reasonRecommended: `Core transaction reliability principles.` },
-      ],
-    },
-    {
-      name: 'Operating Systems',
-      priorityRating: 4,
-      explanation: `Process concurrency, thread synchronization, memory paging, and deadlock handling.`,
-      questionCount: osItems.length || 4,
-      estimatedInterviewFrequency: 'High',
-      questions: osItems.length ? osItems : [
-        { id: 'process-vs-thread', title: 'Process vs Thread: Memory Management & Context Switching', source: 'technical', difficulty: 'Easy', reasonRecommended: `Most popular OS concurrency question.` },
-        { id: 'deadlock-conditions-avoidance', title: 'What is a Deadlock? 4 Necessary Conditions & Banker\'s Algorithm', source: 'technical', difficulty: 'Medium', reasonRecommended: `Standard OS concurrency management question.` },
-      ],
-    },
-    {
-      name: 'Computer Networks',
-      priorityRating: 4,
-      explanation: `Networking protocol stack (TCP/UDP, HTTP/HTTPS, OSI 7-Layer, DNS, Sockets).`,
-      questionCount: netItems.length || 4,
-      estimatedInterviewFrequency: 'High',
-      questions: netItems.length ? netItems : [
-        { id: 'tcp-vs-udp-protocol-comparison', title: 'TCP vs UDP: 3-Way Handshake, Reliability, and Header Size', source: 'technical', difficulty: 'Easy', reasonRecommended: `Core transport layer protocol comparison.` },
-        { id: 'http-vs-https-tls-handshake', title: 'HTTP vs HTTPS: SSL/TLS Handshake & Encryption', source: 'technical', difficulty: 'Medium', reasonRecommended: `Critical web network security question.` },
-      ],
-    },
-  ];
+  const groups = {};
+  techItems.forEach((q) => {
+    const subName = q.subject || q.topic || 'Core CS Technical Concepts';
+    if (!groups[subName]) {
+      groups[subName] = [];
+    }
+    groups[subName].push({
+      id: q.id || q.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      title: q.title,
+      source: 'technical',
+      difficulty: q.difficulty || 'Easy',
+      reasonRecommended: `Core concept question for ${targetLabel}`,
+    });
+  });
+
+  return Object.entries(groups).map(([name, qList]) => ({
+    name,
+    priorityRating: 5,
+    rankCategory: 'Must Learn',
+    explanation: `Core technical interview subjects for ${targetLabel}.`,
+    questionCount: qList.length,
+    estimatedInterviewFrequency: 'Very High',
+    questions: qList,
+  }));
 }
 
-/**
- * Execute Phase 4 end-to-end intelligence analysis (DSA & Technical Topic Centric).
- */
 export const analyzeResults = async (conversationId) => {
   if (!conversationId) {
     throw new Error('Conversation ID is required for AI analysis.');
@@ -448,10 +375,11 @@ export const analyzeResults = async (conversationId) => {
     }
   }
 
-  const defaultDsa = buildDefaultDsaTopics(profile, searchResults);
-  const defaultTech = buildDefaultTechnicalTopics(profile, searchResults);
+  const defaultDsa = buildCategorizedDsaTopics(profile, searchResults);
+  const defaultTech = buildCategorizedTechnicalTopics(profile, searchResults);
 
   const ai = getGeminiClient();
+
   const defaultAnalysis = {
     summary: {
       company: profile.company || null,
@@ -465,14 +393,8 @@ export const analyzeResults = async (conversationId) => {
     dsaTopics: defaultDsa,
     technicalTopics: defaultTech,
     topics: [...defaultDsa, ...defaultTech],
-    learningRoadmap: [
-      { step: 1, title: 'Master Core Data Structures', description: 'Focus on Arrays, HashMaps, Trees, and Graphs first.' },
-      { step: 2, title: 'Master Core Technical Subjects', description: 'Study OOP principles, DBMS Normalization/ACID, OS Concurrency, and TCP/IP Networking.' },
-      { step: 3, title: 'Advanced Algorithmic Patterns', description: 'Practice Dynamic Programming, Sliding Window, and Backtracking.' },
-    ],
-    companyInsights: [
-      { title: `${profile.company || 'Target Company'} Expectations`, description: 'High emphasis on OOP modularity, SQL query performance, OS thread synchronization, and optimal DSA time complexities.' },
-    ],
+    learningRoadmap: [],
+    companyInsights: [],
   };
 
   if (!ai) {
@@ -515,7 +437,6 @@ export const analyzeResults = async (conversationId) => {
     ...(parsed || defaultAnalysis),
   };
 
-  // Save to Cloud Firestore
   if (db && conversationId) {
     try {
       const docRef = db.collection(ANALYSIS_COLLECTION_NAME).doc(conversationId);

@@ -7,34 +7,27 @@ import {
   generateSearchQueries as runGenerateSearchQueries,
   analyzeResults as runAnalyzeResults,
 } from './aiAgent.service.js';
-import { orchestrateSearch, removeDuplicateUrls, sortByRelevance } from './searchOrchestrator.service.js';
-import { searchGithub } from './github.service.js';
-import { searchStackOverflow } from './stackexchange.service.js';
-import { searchReddit } from './reddit.service.js';
-import { searchCodeforces } from './codeforces.service.js';
+import {
+  generateInterviewBlueprint,
+  validateInterviewBlueprint,
+} from './blueprint.service.js';
+import { orchestrateSearch } from './searchOrchestrator.service.js';
 
 const SESSIONS_COLLECTION = 'conversationSessions';
 const ANALYSIS_COLLECTION = 'analysisResults';
 const SEARCH_RESULTS_COLLECTION = 'searchResults';
 
-/**
- * Generate queries using aiAgent service with fallback.
- */
 export const generateQueries = async (conversationId, fields, userId) => {
   try {
     return await runGenerateSearchQueries(conversationId, fields, userId);
   } catch (err) {
     console.warn('[generateQueries Warning]:', err.message);
     return [
-      { topic: 'Dynamic Programming', query: `${fields?.company || 'Tech'} Dynamic Programming Problems`, priorityRating: 5 },
-      { topic: 'Graphs', query: `${fields?.company || 'Tech'} Graph BFS DFS Problems`, priorityRating: 5 },
+      { topic: 'Arrays & Data Structures', query: `${fields?.company || 'General'} ${fields?.role || 'Software Engineer'} Coding Questions`, priorityRating: 5 },
     ];
   }
 };
 
-/**
- * Execute Search using searchOrchestrator with fallback.
- */
 export const search = async (conversationId, userId) => {
   try {
     return await orchestrateSearch(conversationId, userId);
@@ -44,9 +37,6 @@ export const search = async (conversationId, userId) => {
   }
 };
 
-/**
- * Analyze search results using aiAgent service with fallback.
- */
 export const analyze = async (conversationId) => {
   try {
     return await runAnalyzeResults(conversationId);
@@ -56,9 +46,6 @@ export const analyze = async (conversationId) => {
   }
 };
 
-/**
- * Check if analysis results already exist in Cloud Firestore for a conversation.
- */
 export const getCachedAnalysis = async (conversationId) => {
   const db = getDb();
   if (!db || !conversationId) return null;
@@ -79,9 +66,6 @@ export const getCachedAnalysis = async (conversationId) => {
   return null;
 };
 
-/**
- * Format unified response structure expected by client.
- */
 export const buildFrontendResponse = (profile = {}, analysis = {}, questions = []) => {
   return {
     status: 'completed',
@@ -98,22 +82,18 @@ export const buildFrontendResponse = (profile = {}, analysis = {}, questions = [
     analysis: {
       summary: analysis.summary || {},
       topics: analysis.topics || [],
-      categories: analysis.categories || [],
-      priorityTopics: analysis.priorityTopics || [],
+      dsaTopics: analysis.dsaTopics || [],
+      technicalTopics: analysis.technicalTopics || [],
       learningRoadmap: analysis.learningRoadmap || [],
-      recommendations: analysis.recommendations || [],
       companyInsights: analysis.companyInsights || [],
-      interviewStrategy: analysis.interviewStrategy || [],
-      weakAreas: analysis.weakAreas || [],
-      similarTopics: analysis.similarTopics || [],
     },
     questions: questions || [],
   };
 };
 
 /**
- * Master Controller Method for POST /api/agent/message.
- * Supports both string userMessage and options object { message, userMessage, conversationId, userId }.
+ * Master Workflow Orchestrator: Pipeline Execution
+ * User Prompt -> Intent Extraction -> Interview Blueprint -> Blueprint Validation -> Query Builder -> Search Engine -> AI Ranking -> Frontend
  */
 export const processWorkflow = async (userMessageParam, conversationIdParam = null, userIdParam = 'guest') => {
   let userMessage = typeof userMessageParam === 'string' ? userMessageParam : userMessageParam?.message || userMessageParam?.userMessage || '';
@@ -129,7 +109,6 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
   let existingFields = {};
   let existingHistory = [];
 
-  // Step 1: Load existing session if conversationId provided
   if (db && conversationId) {
     try {
       const docSnap = await db.collection(SESSIONS_COLLECTION).doc(conversationId).get();
@@ -148,7 +127,7 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
     { role: 'user', content: trimmedMsg },
   ];
 
-  // Step 2: Extract Intent
+  // STEP 1: Intent Extraction
   let intentResult = null;
   try {
     intentResult = await extractIntent(currentChatHistory, existingFields);
@@ -157,37 +136,27 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
   }
 
   const updatedFields = intentResult?.fields || intentResult || existingFields;
-  const { completed, missingFields } = validateConversation(updatedFields);
 
-  // Step 3: Check if conversation is still collecting missing fields
-  if (!completed) {
-    let nextQuestion = "Could you please specify your target company, role, and experience level?";
-    try {
-      nextQuestion = await generateFollowUpQuestion(updatedFields, missingFields);
-    } catch (fqErr) {
-      console.warn('[generateFollowUpQuestion Warning]:', fqErr.message);
-    }
+  // STEP 2: Generate Interview Blueprint
+  let blueprint = await generateInterviewBlueprint(updatedFields);
 
-    const savedDoc = await updateConversation(conversationId, currentChatHistory, updatedFields, userId);
-
-    return {
-      status: 'collecting',
-      completed: false,
-      conversation: savedDoc,
-      nextQuestion,
-    };
+  // STEP 10: Validate Interview Blueprint (If empty, regenerate)
+  let isValidBlueprint = validateInterviewBlueprint(blueprint);
+  if (!isValidBlueprint) {
+    console.warn('[Workflow Orchestrator] Blueprint invalid/empty. Regenerating blueprint...');
+    blueprint = await generateInterviewBlueprint(updatedFields);
   }
 
-  // Step 4: Criteria Completed! Update conversation status to completed
+  // Save blueprint into updatedFields
+  updatedFields.blueprint = blueprint;
+
   const activeConversationId = conversationId || `conv-${Date.now()}`;
   const savedDoc = await updateConversation(activeConversationId, currentChatHistory, updatedFields, userId);
-
   const finalConversationId = activeConversationId;
 
-  // Step 5: Check Firestore for existing cached analysis
+  // Check cache
   const cached = await getCachedAnalysis(finalConversationId);
   if (cached && cached.analysis) {
-    console.log(`[Workflow Orchestrator] Returning cached analysis for conversationId ${finalConversationId}`);
     return {
       conversationId: finalConversationId,
       conversation: savedDoc,
@@ -195,10 +164,9 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
     };
   }
 
-  // Step 6: Execute full workflow sequence automatically
-  console.log(`[Workflow Orchestrator] Executing end-to-end workflow for conversationId ${finalConversationId}...`);
+  console.log(`[Workflow Orchestrator] Executing Interview Blueprint Pipeline for conversationId ${finalConversationId}...`);
 
-  // Step 6A: Generate Search Queries
+  // STEP 3: Query Builder using Blueprint
   let queries = [];
   try {
     queries = await generateQueries(finalConversationId, updatedFields, userId);
@@ -206,7 +174,7 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
     console.warn('[Workflow Orchestrator generateQueries warning]:', qErr.message);
   }
 
-  // Step 6B: Search All Sources (GitHub, StackOverflow, Reddit, Codeforces)
+  // STEP 4: Search Engine
   let searchResults = { results: [] };
   try {
     searchResults = await search(finalConversationId, userId);
@@ -214,7 +182,7 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
     console.warn('[Workflow Orchestrator search warning]:', sErr.message);
   }
 
-  // Step 6C: Analyze Search Results using Gemini
+  // STEP 6: AI Ranking & Topic Categorization
   let analysisResult = {};
   try {
     analysisResult = await analyze(finalConversationId);
@@ -222,7 +190,6 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
     console.warn('[Workflow Orchestrator analyze warning]:', aErr.message);
   }
 
-  // Step 7: Build & Return Unified Payload
   return {
     conversationId: finalConversationId,
     conversation: savedDoc,
