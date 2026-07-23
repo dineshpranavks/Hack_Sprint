@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 
 /**
  * Results Mode Dashboard Component
- * AI Interview Architect: Pure Renderer of Backend AI-Ranked Recommendations
+ * AI Interview Architect: Pure Renderer of Gemini AI Recommendations
  */
 export default function ResultsDashboard({ profile = {}, analysis = {}, questions = [] }) {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ export default function ResultsDashboard({ profile = {}, analysis = {}, question
     technicalTopics = [],
     learningRoadmap = [],
     companyInsights = [],
+    error = null,
   } = safeAnalysis;
 
   const displayDsaTopics = Array.isArray(dsaTopics) ? dsaTopics : [];
@@ -31,7 +32,7 @@ export default function ResultsDashboard({ profile = {}, analysis = {}, question
     navigate(`/topic/${topicSlug}`);
   };
 
-  const hasNoRecommendations = displayDsaTopics.length === 0 && displayTechTopics.length === 0;
+  const hasNoRecommendations = !!error || (displayDsaTopics.length === 0 && displayTechTopics.length === 0);
 
   return (
     <div className="results-dashboard-root fade-in" style={{ marginTop: 20, paddingBottom: 64 }}>
@@ -52,7 +53,7 @@ export default function ResultsDashboard({ profile = {}, analysis = {}, question
           <div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 12px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 20, color: '#4ade80', fontSize: '0.78rem', fontWeight: 600, marginBottom: 8 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
-              AI Interview Architect Engine Active
+              Gemini AI Recommendation Engine Active
             </div>
             <h2 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#f8fafc', margin: 0, letterSpacing: '-0.02em' }}>
               Interview Preparation for <span style={{ color: '#38bdf8' }}>{displayCompany}</span>
@@ -75,16 +76,31 @@ export default function ResultsDashboard({ profile = {}, analysis = {}, question
         </div>
       </div>
 
-      {/* ERROR MESSAGE IF NO RECOMMENDATIONS */}
+      {/* ERROR MESSAGE IF GEMINI FAILS */}
       {hasNoRecommendations ? (
         <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px border-dashed rgba(255,255,255,0.1)', borderRadius: 16, padding: '48px 24px', textAlign: 'center', color: '#94a3b8' }}>
           <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: 12 }}>⚠️</span>
           <h3 style={{ color: '#f8fafc', fontSize: '1.2rem', fontWeight: 600, margin: '0 0 8px 0' }}>
             Unable to generate personalized recommendations.
           </h3>
-          <p style={{ fontSize: '0.9rem', margin: 0, color: '#64748b' }}>
-            Please try re-submitting your interview prompt or refining your criteria.
+          <p style={{ fontSize: '0.9rem', margin: '0 0 20px 0', color: '#64748b' }}>
+            The AI Recommendation Engine encountered a temporary connection issue.
           </p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              background: '#38bdf8',
+              color: '#0f172a',
+              border: 'none',
+              borderRadius: 8,
+              padding: '10px 20px',
+              fontSize: '0.9rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Retry Recommendation Analysis
+          </button>
         </div>
       ) : (
         <>
@@ -112,8 +128,8 @@ export default function ResultsDashboard({ profile = {}, analysis = {}, question
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
                 {displayDsaTopics.map((topic, idx) => {
-                  const stars = renderStarRating(topic?.priorityRating || 5);
-                  const rankTag = topic?.rankCategory || (topic?.priorityRating >= 5 ? 'Must Learn' : topic?.priorityRating >= 4 ? 'Important' : 'Optional');
+                  const stars = renderStarRating(topic?.priorityRating || topic?.priority || 5);
+                  const rankTag = topic?.rankCategory || ((topic?.priorityRating || topic?.priority) >= 5 ? 'Must Learn' : (topic?.priorityRating || topic?.priority) >= 4 ? 'Important' : 'Optional');
                   const badge = getRankBadgeStyle(rankTag);
 
                   return (
@@ -153,7 +169,7 @@ export default function ResultsDashboard({ profile = {}, analysis = {}, question
                       </h5>
 
                       <p style={{ color: '#94a3b8', fontSize: '0.84rem', margin: '0 0 14px 0', lineHeight: 1.4 }}>
-                        {topic?.explanation || `Core DSA topic for ${displayCompany} interview preparation.`}
+                        {topic?.explanation || topic?.reason || `Core DSA topic for ${displayCompany} interview preparation.`}
                       </p>
 
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 12 }}>
@@ -188,8 +204,8 @@ export default function ResultsDashboard({ profile = {}, analysis = {}, question
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
                 {displayTechTopics.map((topic, idx) => {
-                  const stars = renderStarRating(topic?.priorityRating || 5);
-                  const rankTag = topic?.rankCategory || (topic?.priorityRating >= 5 ? 'Must Learn' : topic?.priorityRating >= 4 ? 'Important' : 'Optional');
+                  const stars = renderStarRating(topic?.priorityRating || topic?.priority || 5);
+                  const rankTag = topic?.rankCategory || ((topic?.priorityRating || topic?.priority) >= 5 ? 'Must Learn' : (topic?.priorityRating || topic?.priority) >= 4 ? 'Important' : 'Optional');
                   const badge = getRankBadgeStyle(rankTag);
 
                   return (
@@ -229,7 +245,7 @@ export default function ResultsDashboard({ profile = {}, analysis = {}, question
                       </h5>
 
                       <p style={{ color: '#94a3b8', fontSize: '0.84rem', margin: '0 0 14px 0', lineHeight: 1.4 }}>
-                        {topic?.explanation || `Essential ${topic?.name || 'Technical'} conceptual questions for ${displayCompany} rounds.`}
+                        {topic?.explanation || topic?.reason || `Essential ${topic?.name || 'Technical'} conceptual questions for ${displayCompany} rounds.`}
                       </p>
 
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 12 }}>

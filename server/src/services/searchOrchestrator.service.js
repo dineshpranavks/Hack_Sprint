@@ -6,58 +6,24 @@ import { searchCodeforces } from './codeforces.service.js';
 import { searchTechnicalQuestions } from './technicalQuestions.service.js';
 
 const SESSIONS_COLLECTION = 'conversationSessions';
-const QUERIES_COLLECTION = 'generatedQueries';
 const SEARCH_RESULTS_COLLECTION = 'searchResults';
 
 /**
- * Filter out non-coding articles, blogs, cheat sheets, HR, salary, resume advice.
+ * Filter out non-coding articles, HR round tips, salary negotiations, and cheat sheets.
  */
 export const filterSolvableCodingProblems = (results = []) => {
   const rejectedKeywords = ['salary', 'resume', 'hr round', 'behavioral', 'cheat sheet', 'handbook', 'career advice', 'negotiation'];
 
-  const codingList = [];
-  const additionalResources = [];
-
-  results.forEach((item) => {
-    if (!item) return;
+  return results.filter((item) => {
+    if (!item) return false;
     const text = `${item.title || ''} ${item.description || ''}`.toLowerCase();
-    const isRejected = rejectedKeywords.some(kw => text.includes(kw));
-
-    if (isRejected) {
-      additionalResources.push({ ...item, isAdditionalResource: true });
-    } else {
-      codingList.push(item);
-    }
+    return !rejectedKeywords.some(kw => text.includes(kw));
   });
-
-  return { codingList, additionalResources };
 };
 
-export const classifyResultItem = (item = {}) => {
-  if (item.source === 'technical' || item.subject) {
-    return 'Technical Question';
-  }
-  const source = (item.source || '').toLowerCase();
-  const title = (item.title || '').toLowerCase();
-  const desc = (item.description || '').toLowerCase();
-  const combinedText = `${title} ${desc}`;
-
-  if (source === 'codeforces' || combinedText.includes('codeforces')) {
-    return 'Coding Problem';
-  }
-
-  const codingKeywords = [
-    'problem', 'input', 'output', 'constraints', 'two sum', 'tree', 'graph', 'dp',
-    'dynamic programming', 'binary search', 'heap', 'backtracking'
-  ];
-
-  if (codingKeywords.some((kw) => combinedText.includes(kw))) {
-    return 'Coding Problem';
-  }
-
-  return 'Technical Question';
-};
-
+/**
+ * Remove duplicate questions based on URL or Title.
+ */
 export const removeDuplicateUrls = (results = []) => {
   const seenUrls = new Set();
   const seenTitles = new Set();
@@ -77,37 +43,32 @@ export const removeDuplicateUrls = (results = []) => {
   });
 };
 
-export const calculateRelevanceScore = (item, profile = {}) => {
-  let score = 50;
-  const company = (profile.company || '').toLowerCase();
-  const text = `${item.title} ${item.description || ''} ${(item.topics || []).join(' ')}`.toLowerCase();
-
-  if (company && text.includes(company)) score += 40;
-  if (item.source === 'codeforces') score += 50;
-  if (item.source === 'technical') score += 45;
-
-  return score;
+/**
+ * Normalize question into flat schema expected by Gemini Call 2:
+ * { title, description, difficulty, tags, topics, platform, url, metadata }
+ */
+export const normalizeQuestionItem = (item = {}) => {
+  return {
+    id: item.id || (item.title || 'question').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    title: item.title || 'Coding Problem',
+    description: item.description || item.summary || '',
+    difficulty: item.difficulty || 'Medium',
+    tags: Array.isArray(item.tags) ? item.tags : (item.topics || []),
+    topics: Array.isArray(item.topics) ? item.topics : (item.tags || []),
+    platform: item.source || item.platform || 'codeforces',
+    url: item.url || '',
+    metadata: {
+      rating: item.rating || null,
+      subject: item.subject || null,
+      company: item.company || null,
+    },
+  };
 };
 
-export const sortByRelevance = (results = [], profile = {}) => {
-  return results.map((item) => ({
-    ...item,
-    type: classifyResultItem(item),
-    relevanceScore: calculateRelevanceScore(item, profile),
-  })).sort((a, b) => b.relevanceScore - a.relevanceScore);
-};
-
-export const mergeResults = (githubRes = [], stackRes = [], redditRes = [], codeforcesRes = [], technicalRes = []) => {
-  return [
-    ...codeforcesRes,
-    ...technicalRes,
-    ...githubRes,
-    ...stackRes,
-    ...redditRes,
-  ];
-};
-
-export const saveResults = async (conversationId, userId, primaryQuery, results = []) => {
+/**
+ * Save flat normalized search results to Cloud Firestore.
+ */
+export const saveSearchResults = async (conversationId, userId, topics = [], results = []) => {
   const db = getDb();
   if (!db || !conversationId) return;
 
@@ -116,45 +77,34 @@ export const saveResults = async (conversationId, userId, primaryQuery, results 
     await docRef.set({
       userId: userId || null,
       conversationId,
-      query: primaryQuery || 'Combined Interview Search',
+      topics,
       totalCount: results.length,
       results,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
   } catch (err) {
-    console.error('[searchOrchestrator saveResults Error]:', err.message);
+    console.error('[searchOrchestrator saveSearchResults Error]:', err.message);
   }
 };
 
-export const runSearchOrchestrator = async (conversationId, userId = 'guest') => {
-  const db = getDb();
+/**
+ * STEP 2: SEARCH ENGINE (Pure Data Collector)
+ * Receives ONLY topic names (e.g. ["Graphs", "Sliding Window", "Operating Systems", "DBMS"]).
+ * Returns ONE flat normalized array of questions.
+ * NO grouping, NO ranking, NO recommendations.
+ */
+export const runSearchOrchestrator = async (conversationId, topicNames = [], userId = 'guest') => {
+  const safeTopics = (Array.isArray(topicNames) && topicNames.length > 0)
+    ? topicNames
+    : ['Arrays', 'Sliding Window', 'Graphs', 'Trees', 'Dynamic Programming', 'Operating Systems', 'DBMS'];
 
-  let profile = {};
-  let queries = [];
+  const queries = safeTopics.map(name => ({
+    query: `${name} coding interview questions`,
+    topic: name,
+  }));
 
-  if (db && conversationId) {
-    try {
-      const sessionSnap = await db.collection(SESSIONS_COLLECTION).doc(conversationId).get();
-      if (sessionSnap.exists) {
-        profile = sessionSnap.data()?.extractedFields || {};
-      }
-
-      const queriesSnap = await db.collection(QUERIES_COLLECTION).doc(conversationId).get();
-      if (queriesSnap.exists) {
-        queries = queriesSnap.data()?.queries || [];
-      }
-    } catch (e) {
-      console.warn('[searchOrchestrator Firestore fetch warning]:', e.message);
-    }
-  }
-
-  if (!queries || !queries.length) {
-    queries = [
-      { query: `${profile.company || 'Tech'} ${profile.role || 'Software Engineer'} interview coding questions` },
-      { query: `${profile.company || 'Tech'} data structures algorithms coding problem` },
-    ];
-  }
+  const profile = { topics: safeTopics };
 
   const [githubItems, stackItems, redditItems, codeforcesItems, technicalItems] = await Promise.all([
     searchGithub(queries, profile).catch(() => []),
@@ -164,30 +114,34 @@ export const runSearchOrchestrator = async (conversationId, userId = 'guest') =>
     searchTechnicalQuestions(queries, profile).catch(() => []),
   ]);
 
-  const rawMerged = mergeResults(githubItems, stackItems, redditItems, codeforcesItems, technicalItems);
-  const deduplicated = removeDuplicateUrls(rawMerged);
-  const { codingList, additionalResources } = filterSolvableCodingProblems(deduplicated);
-  const finalResults = sortByRelevance(codingList, profile);
+  const rawMerged = [
+    ...codeforcesItems,
+    ...technicalItems,
+    ...githubItems,
+    ...stackItems,
+    ...redditItems,
+  ];
 
-  await saveResults(conversationId, userId, queries[0]?.query, finalResults);
+  const deduplicated = removeDuplicateUrls(rawMerged);
+  const solvable = filterSolvableCodingProblems(deduplicated);
+  const flatNormalized = solvable.map(normalizeQuestionItem);
+
+  await saveSearchResults(conversationId, userId, safeTopics, flatNormalized);
 
   return {
     conversationId,
-    totalCount: finalResults.length,
-    results: finalResults,
-    additionalResources,
+    totalCount: flatNormalized.length,
+    results: flatNormalized,
   };
 };
 
 export const orchestrateSearch = runSearchOrchestrator;
 
 export default {
-  classifyResultItem,
   removeDuplicateUrls,
-  calculateRelevanceScore,
-  sortByRelevance,
-  mergeResults,
-  saveResults,
+  filterSolvableCodingProblems,
+  normalizeQuestionItem,
+  saveSearchResults,
   runSearchOrchestrator,
   orchestrateSearch,
 };

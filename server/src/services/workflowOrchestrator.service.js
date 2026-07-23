@@ -4,47 +4,14 @@ import {
   generateFollowUpQuestion,
   updateConversation,
   validateConversation,
-  generateSearchQueries as runGenerateSearchQueries,
-  analyzeResults as runAnalyzeResults,
+  recommendQuestions as runRecommendQuestions,
 } from './aiAgent.service.js';
-import {
-  generateInterviewBlueprint,
-  validateInterviewBlueprint,
-} from './blueprint.service.js';
-import { orchestrateSearch } from './searchOrchestrator.service.js';
+import { inferTopics } from './topicInference.service.js';
+import { runSearchOrchestrator } from './searchOrchestrator.service.js';
 
 const SESSIONS_COLLECTION = 'conversationSessions';
 const ANALYSIS_COLLECTION = 'analysisResults';
 const SEARCH_RESULTS_COLLECTION = 'searchResults';
-
-export const generateQueries = async (conversationId, fields, userId) => {
-  try {
-    return await runGenerateSearchQueries(conversationId, fields, userId);
-  } catch (err) {
-    console.warn('[generateQueries Warning]:', err.message);
-    return [
-      { topic: 'Arrays & Data Structures', query: `${fields?.company || 'General'} ${fields?.role || 'Software Engineer'} Coding Questions`, priorityRating: 5 },
-    ];
-  }
-};
-
-export const search = async (conversationId, userId) => {
-  try {
-    return await orchestrateSearch(conversationId, userId);
-  } catch (err) {
-    console.warn('[search Warning]:', err.message);
-    return { conversationId, totalCount: 0, results: [] };
-  }
-};
-
-export const analyze = async (conversationId) => {
-  try {
-    return await runAnalyzeResults(conversationId);
-  } catch (err) {
-    console.warn('[analyze Warning]:', err.message);
-    return { summary: {}, topics: [] };
-  }
-};
 
 export const getCachedAnalysis = async (conversationId) => {
   const db = getDb();
@@ -86,14 +53,17 @@ export const buildFrontendResponse = (profile = {}, analysis = {}, questions = [
       technicalTopics: analysis.technicalTopics || [],
       learningRoadmap: analysis.learningRoadmap || [],
       companyInsights: analysis.companyInsights || [],
+      error: analysis.error || null,
     },
     questions: questions || [],
   };
 };
 
 /**
- * Master Workflow Orchestrator: Pipeline Execution
- * User Prompt -> Intent Extraction -> Interview Blueprint -> Blueprint Validation -> Query Builder -> Search Engine -> AI Ranking -> Frontend
+ * Master Execution Flow: Exactly 2 Gemini Calls
+ * 1. Intent Extraction -> CALL 1: inferTopics(profile)
+ * 2. Search Engine: runSearchOrchestrator(conversationId, topicNames)
+ * 3. CALL 2: recommendQuestions(conversationId, profile, topicsInferred, searchResults)
  */
 export const processWorkflow = async (userMessageParam, conversationIdParam = null, userIdParam = 'guest') => {
   let userMessage = typeof userMessageParam === 'string' ? userMessageParam : userMessageParam?.message || userMessageParam?.userMessage || '';
@@ -127,7 +97,7 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
     { role: 'user', content: trimmedMsg },
   ];
 
-  // STEP 1: Intent Extraction
+  // Intent Extraction
   let intentResult = null;
   try {
     intentResult = await extractIntent(currentChatHistory, existingFields);
@@ -136,20 +106,6 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
   }
 
   const updatedFields = intentResult?.fields || intentResult || existingFields;
-
-  // STEP 2: Generate Interview Blueprint
-  let blueprint = await generateInterviewBlueprint(updatedFields);
-
-  // STEP 10: Validate Interview Blueprint (If empty, regenerate)
-  let isValidBlueprint = validateInterviewBlueprint(blueprint);
-  if (!isValidBlueprint) {
-    console.warn('[Workflow Orchestrator] Blueprint invalid/empty. Regenerating blueprint...');
-    blueprint = await generateInterviewBlueprint(updatedFields);
-  }
-
-  // Save blueprint into updatedFields
-  updatedFields.blueprint = blueprint;
-
   const activeConversationId = conversationId || `conv-${Date.now()}`;
   const savedDoc = await updateConversation(activeConversationId, currentChatHistory, updatedFields, userId);
   const finalConversationId = activeConversationId;
@@ -164,43 +120,45 @@ export const processWorkflow = async (userMessageParam, conversationIdParam = nu
     };
   }
 
-  console.log(`[Workflow Orchestrator] Executing Interview Blueprint Pipeline for conversationId ${finalConversationId}...`);
+  console.log(`[Workflow Orchestrator] Starting 2-Call AI Pipeline for ${finalConversationId}...`);
 
-  // STEP 3: Query Builder using Blueprint
-  let queries = [];
+  // STEP 1: GEMINI CALL 1 — TOPIC INFERENCE ENGINE
+  let topicsInferred = { codingTopics: [], technicalTopics: [], learningOrder: [] };
   try {
-    queries = await generateQueries(finalConversationId, updatedFields, userId);
-  } catch (qErr) {
-    console.warn('[Workflow Orchestrator generateQueries warning]:', qErr.message);
+    topicsInferred = await inferTopics(updatedFields);
+  } catch (tErr) {
+    console.warn('[Workflow Orchestrator inferTopics warning]:', tErr.message);
   }
 
-  // STEP 4: Search Engine
-  let searchResults = { results: [] };
+  const topicNames = [
+    ...topicsInferred.codingTopics.map(t => t.name),
+    ...topicsInferred.technicalTopics.map(t => t.name),
+  ];
+
+  // STEP 2: SEARCH ENGINE (Data Collector ONLY consuming topic names)
+  let searchPayload = { results: [] };
   try {
-    searchResults = await search(finalConversationId, userId);
+    searchPayload = await runSearchOrchestrator(finalConversationId, topicNames, userId);
   } catch (sErr) {
-    console.warn('[Workflow Orchestrator search warning]:', sErr.message);
+    console.warn('[Workflow Orchestrator Search Engine warning]:', sErr.message);
   }
 
-  // STEP 6: AI Ranking & Topic Categorization
+  // STEP 3: GEMINI CALL 2 — AI RECOMMENDATION ENGINE
   let analysisResult = {};
   try {
-    analysisResult = await analyze(finalConversationId);
+    analysisResult = await runRecommendQuestions(finalConversationId, updatedFields, topicsInferred, searchPayload.results || []);
   } catch (aErr) {
-    console.warn('[Workflow Orchestrator analyze warning]:', aErr.message);
+    console.warn('[Workflow Orchestrator recommendQuestions warning]:', aErr.message);
   }
 
   return {
     conversationId: finalConversationId,
     conversation: savedDoc,
-    ...buildFrontendResponse(updatedFields, analysisResult, searchResults.results || []),
+    ...buildFrontendResponse(updatedFields, analysisResult, searchPayload.results || []),
   };
 };
 
 export default {
-  generateQueries,
-  search,
-  analyze,
   getCachedAnalysis,
   buildFrontendResponse,
   processWorkflow,

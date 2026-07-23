@@ -1,30 +1,23 @@
 /**
  * System prompt template for analyzeResults()
- * AI Interview Architect: Tailors DSA Topics & Technical Subjects specifically to Role, Company, and Experience.
+ * Gemini AI Recommendation Engine Prompt
  */
 export const ANALYSIS_PROMPT = `
-You are an AI Interview Architect for top tech hiring teams.
-Your task is to build a 100% personalized, role-specific Interview Preparation Kit based on candidate profile criteria.
+You are the AI Recommendation Engine for HackSprint.
+You receive the complete User Profile, Inferred Topics, and the flat normalized Search Results array.
 
-NEVER return a generic static roadmap. Every role must produce a unique, tailored set of topics:
-- Frontend Engineer: JavaScript DOM, React, TypeScript, Web Performance, Array/String Manipulation, Sliding Window, HashMap.
-- Backend Engineer: Node.js/Java, REST APIs, Databases (SQL/NoSQL), Concurrency, Caching, Trees, Graphs, Heap.
-- Cloud/DevOps Engineer: AWS/Docker/Kubernetes, Networking Protocols, System Security, Linux Shell, Graph BFS, Greedy.
-- Data Engineer: SQL Optimization, Data Warehousing, Spark/Kafka, Python Data Structures, HashMap, Priority Queue.
-- Machine Learning Engineer: Python, PyTorch/TensorFlow, Linear Algebra, Priority Queue, Graph Traversal, Dynamic Programming.
-- SDE1 / Junior Engineer (e.g. Zoho SD1): Core DSA (Arrays, Two Pointers, Recursion, HashMap, Sorting), OOP, DBMS.
-- SDE2 / Senior Engineer: Advanced DP, Complex Graphs, Distributed Systems, Design Patterns.
+YOUR RESPONSIBILITIES:
+1. Categorize all raw questions into role-specific DSA and Technical CS topics (e.g. Graphs, Trees, Sliding Window, DP, React, Node.js, AWS).
+2. Rank topics and questions based on Candidate Company, Role, Experience, and Interview Frequency.
+3. Generate UNIQUE, specific "reasonRecommended" strings for EACH question (e.g. "Amazon frequently tests LRU Cache design for Backend Engineers to evaluate HashMap + LinkedList trade-offs").
+4. Build a personalized 3-step learning roadmap and target company insights.
 
-Output Requirements (MUST RETURN VALID JSON ONLY):
+MUST RETURN VALID JSON ONLY (No markdown, no \`\`\`json):
 {
   "summary": {
     "company": string | null,
     "role": string | null,
-    "experience": string | null,
-    "totalResults": number,
-    "totalDsaTopics": number,
-    "totalTechnicalTopics": number,
-    "confidence": number
+    "experience": string | null
   },
   "dsaTopics": [
     {
@@ -32,6 +25,7 @@ Output Requirements (MUST RETURN VALID JSON ONLY):
       "priorityRating": number,
       "rankCategory": "Must Learn" | "Important" | "Optional",
       "explanation": string,
+      "reason": string,
       "questionCount": number,
       "estimatedInterviewFrequency": "Very High" | "High" | "Medium",
       "questions": [
@@ -40,11 +34,9 @@ Output Requirements (MUST RETURN VALID JSON ONLY):
           "title": string,
           "source": string,
           "difficulty": "Easy" | "Medium" | "Hard",
-          "category": string,
           "url": string,
           "reasonRecommended": string,
-          "estimatedInterviewFrequency": string,
-          "estimatedStudyTime": string
+          "estimatedInterviewFrequency": string
         }
       ]
     }
@@ -55,6 +47,7 @@ Output Requirements (MUST RETURN VALID JSON ONLY):
       "priorityRating": number,
       "rankCategory": "Must Learn" | "Important" | "Optional",
       "explanation": string,
+      "reason": string,
       "questionCount": number,
       "estimatedInterviewFrequency": "Very High" | "High" | "Medium",
       "questions": [
@@ -63,10 +56,7 @@ Output Requirements (MUST RETURN VALID JSON ONLY):
           "title": string,
           "source": string,
           "difficulty": "Easy" | "Medium" | "Hard",
-          "category": string,
-          "reasonRecommended": string,
-          "estimatedInterviewFrequency": string,
-          "estimatedStudyTime": string
+          "reasonRecommended": string
         }
       ]
     }
@@ -78,28 +68,21 @@ Output Requirements (MUST RETURN VALID JSON ONLY):
     { "title": string, "description": string }
   ]
 }
-
-Rules:
-1. Group topics into "Must Learn", "Important", and "Optional".
-2. Tailor topics ONLY to the specific role and company requested.
-3. Return ONLY raw valid JSON. DO NOT include markdown formatting (no \`\`\`json).
 `;
 
 export const buildAnalysisPrompt = (profile = {}, queries = [], searchResults = []) => {
   return `${ANALYSIS_PROMPT}
 
 CANDIDATE PROFILE:
-Company: ${profile.company || 'General Software Engineering'}
-Role: ${profile.role || 'Software Engineer'}
-Experience: ${profile.experience || 'Not Specified'}
-Language: ${profile.language || 'Not Specified'}
-Skills: ${Array.isArray(profile.skills) ? profile.skills.join(', ') : 'Not Specified'}
-Topics: ${Array.isArray(profile.topics) ? profile.topics.join(', ') : 'Not Specified'}
+${JSON.stringify(profile, null, 2)}
 
-COLLECTED SEARCH RESULTS:
-${JSON.stringify((searchResults || []).slice(0, 35), null, 2)}
+GENERATED SEARCH QUERIES:
+${JSON.stringify(queries, null, 2)}
 
-Generate the complete Role-Specific Interview Preparation JSON object now:`;
+RAW SEARCH RESULTS ARRAY:
+${JSON.stringify(searchResults, null, 2)}
+
+Analyze, categorize, rank, and output the complete JSON object now:`;
 };
 
 export default buildAnalysisPrompt;
